@@ -44,12 +44,28 @@ npm start
 
 ## Bunny Magic Container
 
-1. Bouw de image met de meegeleverde `Dockerfile` (twee Alpine-lagen).
-2. Hang een **persistent volume** op `/data`. SQLite overleeft anders een herstart niet.
-3. Draai **één replica**. Elk pod krijgt een eigen volume; meerdere replica’s splitsen de wiki.
-4. Zet de env-variabelen hierboven. `SQLITE_PATH=/data/wiki.db` staat al in de image.
-5. Healthcheck: `GET /healthz`.
-6. Poort `43121`.
+Bunny bouwt **niet** vanuit je Git-repo. Je koppelt een **container-image**.
+De image staat op GitHub Container Registry (geen GitHub-login nodig zolang het package public is):
+
+`ghcr.io/meijer21/uniformwiki:latest`
+
+1. Magic Containers → **Add App**.
+2. **Add Container**
+   - Registry: **GitHub Container Registry** (of “public / GitHub”)
+   - Image: `meijer21/uniformwiki`
+   - Tag: `latest`
+   - Poort: `43121`
+3. Persistent volume mount: **`/data`**
+4. Eén replica (anders krijgt elke replica een lege eigen database).
+5. Environment:
+   - `ADMIN_API_KEY` — kies zelf een lange geheime sleutel
+   - `FLUENTCART_WEBHOOK_SECRET`
+   - `PUBLIC_BASE_URL` — jouw Bunny-URL, zonder slash aan het eind
+   - `SQLITE_PATH=/data/wiki.db`
+6. Endpoint/health: poort `43121`, pad `/healthz`.
+
+Elke push naar `main` bouwt een nieuwe `linux/amd64`-image via GitHub Actions.
+Probeer **niet** GitHub als git-bron of Image Registry te autoriseren — dat is niet nodig.
 
 Bunny Database (libSQL) kun je later aansluiten door hetzelfde schema te houden en alleen de pad/URL in `src/db.ts` te wisselen. Die client zit er bewust nog niet in.
 
