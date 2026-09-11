@@ -15,7 +15,7 @@ function isValidBsn(digits: string): boolean {
 
 const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const PHONE_RE =
-  /(?:\+|00)\s*31[\s.-]?(?:\(?0\)?[\s.-]?)?(?:\d[\s.-]?){8,9}|(?<!\d)0[\s.-]?(?:[1-9]\d[\s.-]?){8}(?!\d)/g;
+  /(?:\+|00)31[\s.-]*(?:\(0\)[\s.-]*)?\d(?:[\s.-]*\d){8}\b|\b0[1-9](?:[\s.-]*\d){8}\b/g;
 const BSN_DOTTED_RE = /\b\d{4}\.\d{2}\.\d{3}\b/g;
 const BSN_PLAIN_RE = /(?<!\d)\d{9}(?!\d)/g;
 
