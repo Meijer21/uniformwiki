@@ -2,6 +2,8 @@
 
 Lichte kennisbank over uniformen en beroepskleding. Mensen lezen server-side HTML. AI-agents gebruiken dezelfde goedgekeurde teksten via REST en MCP. Gebouwd als één Fastify-proces voor Bunny Magic Containers.
 
+Uitleg van het project, de keuzes en wat er gebouwd is: [PROJECT.md](PROJECT.md).
+
 ## Wat je ermee doet
 
 - Artikelen zoeken en lezen zonder account
