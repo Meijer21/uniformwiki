@@ -60,62 +60,121 @@ function isWikiRecord(rec) {
   return String(rec.Name ?? "").trim().toLowerCase() === RECORD_NAME;
 }
 
+function zoneId(z) {
+  return z?.Id ?? z?.id;
+}
+
 function hostnameList(zone) {
-  return (zone.Hostnames || []).map((h) => (typeof h === "string" ? h : h.Value || h.Hostname || "")).filter(Boolean);
+  return (zone.Hostnames || zone.hostnames || []).map((h) => {
+    if (typeof h === "string") return h;
+    return h.Value || h.Hostname || h.value || h.hostname || "";
+  }).filter(Boolean);
+}
+
+function hasMainSite(zone) {
+  const hosts = hostnameList(zone).map((h) => h.toLowerCase());
+  return hosts.includes(ZONE_DOMAIN) || hosts.includes(`www.${ZONE_DOMAIN}`);
+}
+
+async function getPullZone(id) {
+  const { status, data } = await bunny(`/pullzone/${id}`, { allow: [200, 404] });
+  if (status === 404) return null;
+  return data;
+}
+
+async function listPullZones() {
+  const zones = [];
+  for (const page of [1, 0]) {
+    const { status, data } = await bunny(`/pullzone?page=${page}&perPage=1000`, { allow: [200, 400] });
+    if (status !== 200 || !data) continue;
+    const items = data.Items || data.items || (Array.isArray(data) ? data : []);
+    if (items.length) {
+      console.log(`Pull zones pagina ${page}: ${items.length} (keys: ${Object.keys(items[0] || {}).slice(0, 8).join(",")})`);
+      zones.push(...items);
+      break;
+    }
+  }
+  return zones;
+}
+
+async function resolveMcPullZone(zones) {
+  const fromId = await getPullZone(MC_PULLZONE_ID);
+  if (fromId) {
+    console.log(`MC-zone via id ${MC_PULLZONE_ID}: ${fromId.Name || fromId.name}`);
+    return fromId;
+  }
+
+  try {
+    const { data: app } = await bunny(`/mc/apps/${MC_APP_ID}`);
+    const endpoints = (app.containerTemplates || []).flatMap((t) => t.endpoints || []);
+    const pz = endpoints.map((e) => e.pullZoneId).find(Boolean);
+    if (pz) {
+      const z = await getPullZone(Number(pz));
+      if (z) {
+        console.log(`MC-zone via app ${MC_APP_ID}: ${pz}`);
+        return z;
+      }
+    }
+  } catch (err) {
+    console.log(`MC-app lookup: ${err.message}`);
+  }
+
+  const byHost = zones.find((z) =>
+    hostnameList(z).some((h) => h.toLowerCase().includes("mc-kghhhdngwp") || h.toLowerCase() === CNAME_TARGET),
+  );
+  if (byHost) return byHost;
+
+  throw new Error("Magic Container pull zone niet gevonden (lijst + id + app).");
 }
 
 async function main() {
   console.log("Alleen wiki.thisline.eu. thisline.eu / www blijven onaangeroerd.\n");
 
-  const zones = [];
-  let page = 0;
-  for (;;) {
-    const { data } = await bunny(`/pullzone?page=${page}&perPage=1000`);
-    const items = data.Items || data.items || (Array.isArray(data) ? data : []);
-    zones.push(...items);
-    if (items.length < 1000) break;
-    page += 1;
-  }
-
-  const mcZone = zones.find((z) => z.Id === MC_PULLZONE_ID);
-  if (!mcZone) throw new Error(`Magic Container pull zone ${MC_PULLZONE_ID} niet gevonden.`);
+  const zones = await listPullZones();
+  const mcZone = await resolveMcPullZone(zones);
+  const mcId = zoneId(mcZone);
   const mcHosts = hostnameList(mcZone);
-  console.log(`MC-zone ${MC_PULLZONE_ID} (${mcZone.Name}): ${mcHosts.join(", ") || "(geen extra hostnames)"}`);
+  console.log(`MC-zone ${mcId} (${mcZone.Name || mcZone.name}): ${mcHosts.join(", ") || "(geen extra hostnames)"}`);
 
-  const mainHosts = new Set([ZONE_DOMAIN, `www.${ZONE_DOMAIN}`]);
-  for (const z of zones) {
-    const hosts = hostnameList(z).map((h) => h.toLowerCase());
-    if (hosts.includes(HOST)) {
-      if (z.Id === MC_PULLZONE_ID) {
-        console.log(`wiki hangt al op MC-zone ${z.Id}`);
-        continue;
+  const knownIds = new Set(zones.map(zoneId).filter((id) => id != null));
+  for (const extraId of [LOOP_PULLZONE_ID, mcId]) {
+    if (!knownIds.has(extraId)) {
+      const extra = await getPullZone(extraId);
+      if (extra) {
+        zones.push(extra);
+        knownIds.add(extraId);
       }
-      if (hosts.some((h) => mainHosts.has(h))) {
-        throw new Error(`Stop: zone ${z.Id} (${z.Name}) heeft wiki én het hoofddomein. Niets gedaan.`);
-      }
-      console.log(`Haal wiki weg van extra zone ${z.Id} (${z.Name})`);
-      await bunny(`/pullzone/${z.Id}/removeHostname`, {
-        method: "POST",
-        body: { Hostname: HOST },
-        allow: [200, 204, 404],
-      });
     }
   }
 
-  if (zones.some((z) => z.Id === LOOP_PULLZONE_ID)) {
-    const loop = zones.find((z) => z.Id === LOOP_PULLZONE_ID);
-    const hosts = hostnameList(loop).map((h) => h.toLowerCase());
-    if (hosts.includes(HOST)) {
-      if (hosts.some((h) => mainHosts.has(h))) {
-        throw new Error("Stop: lus-zone bevat ook het hoofddomein.");
-      }
-      console.log(`Haal wiki weg van lus-zone ${LOOP_PULLZONE_ID}`);
-      await bunny(`/pullzone/${LOOP_PULLZONE_ID}/removeHostname`, {
-        method: "POST",
-        body: { Hostname: HOST },
-        allow: [200, 204, 404],
-      });
+  for (const z of zones) {
+    const id = zoneId(z);
+    const hosts = hostnameList(z).map((h) => h.toLowerCase());
+    if (!hosts.includes(HOST)) continue;
+    if (id === mcId) {
+      console.log(`wiki hangt al op MC-zone ${id}`);
+      continue;
     }
+    if (hasMainSite(z)) {
+      throw new Error(`Stop: zone ${id} (${z.Name || z.name}) heeft wiki én het hoofddomein. Niets gedaan.`);
+    }
+    console.log(`Haal wiki weg van extra zone ${id} (${z.Name || z.name})`);
+    await bunny(`/pullzone/${id}/removeHostname`, {
+      method: "POST",
+      body: { Hostname: HOST },
+      allow: [200, 204, 404],
+    });
+  }
+
+  const loop = await getPullZone(LOOP_PULLZONE_ID);
+  if (loop && hostnameList(loop).some((h) => h.toLowerCase() === HOST)) {
+    if (hasMainSite(loop)) throw new Error("Stop: lus-zone bevat ook het hoofddomein.");
+    console.log(`Haal wiki weg van lus-zone ${LOOP_PULLZONE_ID}`);
+    await bunny(`/pullzone/${LOOP_PULLZONE_ID}/removeHostname`, {
+      method: "POST",
+      body: { Hostname: HOST },
+      allow: [200, 204, 404],
+    });
   }
 
   const { data: dnsList } = await bunny("/dnszone?page=1&perPage=100");
@@ -123,26 +182,29 @@ async function main() {
   const dns = dnsZones.find((z) => String(z.Domain || z.Name || "").toLowerCase() === ZONE_DOMAIN);
   if (!dns) throw new Error("DNS-zone thisline.eu niet gevonden.");
 
-  const { data: dnsDetail } = await bunny(`/dnszone/${dns.Id}`);
-  const records = dnsDetail.Records || [];
+  const dnsId = dns.Id ?? dns.id;
+  const { data: dnsDetail } = await bunny(`/dnszone/${dnsId}`);
+  const records = dnsDetail.Records || dnsDetail.records || [];
   const wikiRecords = records.filter(isWikiRecord);
-  console.log(`DNS thisline.eu id=${dns.Id}; ${wikiRecords.length} wiki-record(s). Overige records: niet aangeraakt.`);
+  console.log(`DNS thisline.eu id=${dnsId}; ${wikiRecords.length} wiki-record(s). Overige records: niet aangeraakt.`);
 
   for (const rec of wikiRecords) {
-    assertWikiOnly(rec.Name);
-    const type = rec.Type;
+    assertWikiOnly(rec.Name ?? rec.name);
+    const type = rec.Type ?? rec.type;
+    const recId = rec.Id ?? rec.id;
     if (![TYPES.A, TYPES.AAAA, TYPES.CNAME, TYPES.PULLZONE].includes(type)) {
-      console.log(`Laat wiki-record type ${type} id=${rec.Id} staan`);
+      console.log(`Laat wiki-record type ${type} id=${recId} staan`);
       continue;
     }
-    console.log(`Verwijder wiki-record type=${type} id=${rec.Id} value=${rec.Value}`);
-    await bunny(`/dnszone/${dns.Id}/records/${rec.Id}`, { method: "DELETE", allow: [200, 204, 404] });
+    console.log(`Verwijder wiki-record type=${type} id=${recId} value=${rec.Value ?? rec.value}`);
+    await bunny(`/dnszone/${dnsId}/records/${recId}`, { method: "DELETE", allow: [200, 204, 404] });
   }
 
-  const already = hostnameList(mcZone).some((h) => h.toLowerCase() === HOST);
+  const refreshed = (await getPullZone(mcId)) || mcZone;
+  const already = hostnameList(refreshed).some((h) => h.toLowerCase() === HOST);
   if (!already) {
-    console.log(`Voeg ${HOST} toe aan MC-zone ${MC_PULLZONE_ID}`);
-    await bunny(`/pullzone/${MC_PULLZONE_ID}/addHostname`, {
+    console.log(`Voeg ${HOST} toe aan MC-zone ${mcId}`);
+    await bunny(`/pullzone/${mcId}/addHostname`, {
       method: "POST",
       body: { Hostname: HOST },
       allow: [200, 204],
@@ -158,14 +220,14 @@ async function main() {
     Accelerated: false,
   };
   try {
-    await bunny(`/dnszone/${dns.Id}/records`, {
+    await bunny(`/dnszone/${dnsId}/records`, {
       method: "PUT",
       body: cnameBody,
       allow: [200, 201, 204],
     });
   } catch (err) {
     console.log(`PUT records faalde (${err.message}); probeer POST`);
-    await bunny(`/dnszone/${dns.Id}/records`, {
+    await bunny(`/dnszone/${dnsId}/records`, {
       method: "POST",
       body: cnameBody,
       allow: [200, 201, 204],
@@ -178,8 +240,8 @@ async function main() {
     /* optioneel; MC-app niet nodig voor DNS */
   }
 
-  console.log("Wacht 15s op DNS, daarna gratis SSL…");
-  await new Promise((r) => setTimeout(r, 15000));
+  console.log("Wacht 40s op DNS, daarna gratis SSL…");
+  await new Promise((r) => setTimeout(r, 40000));
   const cert = await bunny(
     `/pullzone/loadFreeCertificate?hostname=${encodeURIComponent(HOST)}`,
     { allow: [200, 204, 400] },
