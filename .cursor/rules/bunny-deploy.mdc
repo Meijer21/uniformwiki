@@ -1,0 +1,39 @@
+---
+description: Deploy-flow Cursor → GitHub → Bunny Magic Containers
+alwaysApply: true
+---
+
+# Bunny-deploy vanuit Cursor
+
+Antwoorden aan de gebruiker in het Nederlands.
+
+## Remotes
+
+- Werk in de **GitHub-repo** (`Meijer21/…`). Push naar de git-remote die naar `github.com` wijst.
+- Als er zowel `origin` (Cursor) als `github` bestaat: committen, daarna **beide** pushen. GitHub Actions draait alleen op GitHub.
+- Geen pull requests aanmaken tenzij de gebruiker erom vraagt.
+
+## Elke app (licht)
+
+- Eén proces, `Dockerfile` `linux/amd64`, healthcheck `GET /healthz`, poort ≠ 3000/5173/8080.
+- Bunny pult **GHCR-images**, geen Git-repo. Image: `ghcr.io/meijer21/<repo>`.
+- SQLite: één replica, volume `/data`. Geen Anycast als publiek domein.
+- CDN-endpoint, Origin SSL uit, sticky uit. DNS: **plain CNAME** naar `mc-….bunny.run`, **geen** DNS “CDN/Accelerate” (anders 508 Loop Detected).
+- Shield per pull zone van díe Magic Container, niet geërfd van thisline.eu.
+
+## Wijzigingen aan een bestaande app
+
+1. Code wijzigen, committen, pushen naar GitHub `main`.
+2. Actions bouwt `:latest` en `:<sha>` en doet een rolling update als secret `BUNNYNET_API_KEY` bestaat.
+3. Zeg expliciet als dat secret ontbreekt — dan moet de gebruiker nog Deploy klikken in Bunny.
+
+## Nieuwe Bunny-app
+
+1. GitHub-repo aanmaken/clonen in Cursor (niet een losse New Project-kopie zonder GitHub-remote).
+2. Dockerfile + `deploy/magic-container.json` + workflow uit `deploy/templates/github-deploy.yml`.
+3. `scripts/bunny.mjs` meenemen. Spec: naam, image, poort, volume, regio `FR`.
+4. Gebruiker eenmalig: secret `BUNNYNET_API_KEY`; daarna Actions → **Provision Magic Container** of lokaal `node scripts/bunny.mjs provision`.
+5. `BUNNY_APP_ID` als GitHub variable zetten (id uit `/magic-containers/apps/<id>/`).
+6. Hostname: CNAME zonder Accelerate; Shield op de nieuwe pull zone.
+
+API-keys en secrets nooit in de repo. Container-env via `BUNNY_ENV_*` of Bunny-dashboard.

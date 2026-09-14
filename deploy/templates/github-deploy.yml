@@ -1,0 +1,25 @@
+# Kopieer naar .github/workflows/deploy.yml in een nieuwe GitHub-repo.
+# Eén keer per GitHub-account: secret BUNNYNET_API_KEY.
+# Per app: variable BUNNY_APP_ID (uit de Magic Containers-URL).
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    permissions:
+      contents: read
+      packages: write
+    uses: Meijer21/uniformwiki/.github/workflows/reusable-bunny-image.yml@main
+    with:
+      image: ghcr.io/meijer21/JOUW-APP
+      image_title: JOUW-APP
+      package_name: JOUW-APP
+      bunny_container: JOUW-APP
+      bunny_app_id: ${{ vars.BUNNY_APP_ID }}
+    secrets:
+      BUNNYNET_API_KEY: ${{ secrets.BUNNYNET_API_KEY }}

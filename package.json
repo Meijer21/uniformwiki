@@ -10,7 +10,10 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "bunny": "node scripts/bunny.mjs",
+    "bunny:apps": "node scripts/bunny.mjs apps",
+    "bunny:provision": "node scripts/bunny.mjs provision"
   },
   "dependencies": {
     "@fastify/formbody": "^8.0.2",

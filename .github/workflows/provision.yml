@@ -1,0 +1,29 @@
+name: Provision Magic Container
+
+on:
+  workflow_dispatch:
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Maak of hergebruik de Magic Container
+        env:
+          BUNNYNET_API_KEY: ${{ secrets.BUNNYNET_API_KEY }}
+          BUNNY_IMAGE_REGISTRY_ID: ${{ vars.BUNNY_IMAGE_REGISTRY_ID }}
+          BUNNY_APP_ID: ${{ vars.BUNNY_APP_ID }}
+          BUNNY_ENV_ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
+          BUNNY_ENV_FLUENTCART_WEBHOOK_SECRET: ${{ secrets.FLUENTCART_WEBHOOK_SECRET }}
+          BUNNY_ENV_PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
+        run: |
+          if [ -z "$BUNNYNET_API_KEY" ]; then
+            echo "Zet repository secret BUNNYNET_API_KEY (bunny.net account-API-key)."
+            exit 1
+          fi
+          node scripts/bunny.mjs provision

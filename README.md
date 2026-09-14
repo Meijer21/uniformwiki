@@ -2,7 +2,8 @@
 
 Lichte kennisbank over uniformen en beroepskleding. Mensen lezen server-side HTML. AI-agents gebruiken dezelfde goedgekeurde teksten via REST en MCP. Gebouwd als één Fastify-proces voor Bunny Magic Containers.
 
-Uitleg van het project, de keuzes en wat er gebouwd is: [PROJECT.md](PROJECT.md).
+Uitleg van het project, de keuzes en wat er gebouwd is: [PROJECT.md](PROJECT.md).  
+Cursor → GitHub → Bunny: [WORKFLOW.md](WORKFLOW.md).
 
 ## Wat je ermee doet
 
@@ -66,8 +67,14 @@ De image staat op GitHub Container Registry (geen GitHub-login nodig zolang het 
    - `SQLITE_PATH=/data/wiki.db`
 6. Endpoint/health: poort `43121`, pad `/healthz`.
 
-Elke push naar `main` bouwt een nieuwe `linux/amd64`-image via GitHub Actions.
-Probeer **niet** GitHub als git-bron of Image Registry te autoriseren — dat is niet nodig.
+Elke push naar GitHub `main` bouwt een `linux/amd64`-image. Met secret `BUNNYNET_API_KEY` volgt een rolling update op de Magic Container. Speelboek (Cursor, nieuwe apps, DNS): [WORKFLOW.md](WORKFLOW.md).
+
+```bash
+export BUNNYNET_API_KEY=…
+npm run bunny -- apps
+```
+
+Probeer **niet** GitHub als git-bron in Bunny te koppelen — Bunny pult images.
 
 Bunny Database (libSQL) kun je later aansluiten door hetzelfde schema te houden en alleen de pad/URL in `src/db.ts` te wisselen. Die client zit er bewust nog niet in.
 

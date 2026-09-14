@@ -1,0 +1,35 @@
+{
+  "name": "uniformwiki",
+  "runtimeType": "shared",
+  "terminationGracePeriodSeconds": 30,
+  "autoScaling": { "min": 1, "max": 1 },
+  "regionSettings": {
+    "requiredRegionIds": ["FR"],
+    "allowedRegionIds": ["FR"],
+    "maxAllowedRegions": 1
+  },
+  "volumes": [{ "name": "data", "size": 1 }],
+  "container": {
+    "name": "uniformwiki",
+    "endpointName": "Web",
+    "imageNamespace": "meijer21",
+    "imageName": "uniformwiki",
+    "imageTag": "latest",
+    "imagePullPolicy": "always",
+    "port": 43121,
+    "volumeMounts": [{ "name": "data", "mountPath": "/data" }],
+    "probes": {
+      "readiness": {
+        "httpGet": {
+          "request": { "path": "/healthz", "portNumber": 43121 },
+          "response": { "expectedStatusCode": "ok" }
+        }
+      }
+    },
+    "environment": {
+      "PORT": "43121",
+      "HOST": "0.0.0.0",
+      "SQLITE_PATH": "/data/wiki.db"
+    }
+  }
+}

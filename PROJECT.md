@@ -72,8 +72,10 @@ Poort: **43121**. Health: `GET /healthz`.
 Magic Containers bouwt **niet** vanuit Git. De flow is:
 
 1. Push naar `main` op [github.com/Meijer21/uniformwiki](https://github.com/Meijer21/uniformwiki)
-2. GitHub Actions bouwt `linux/amd64` en pusht `ghcr.io/meijer21/uniformwiki:latest`
-3. Bunny pult die image
+2. GitHub Actions bouwt `linux/amd64` en pusht `ghcr.io/meijer21/uniformwiki:<sha>`
+3. Met secret `BUNNYNET_API_KEY` volgt een rolling update op de pod
+
+Speelboek voor Cursor en extra apps: [WORKFLOW.md](WORKFLOW.md). CLI: `scripts/bunny.mjs` (provision + rolling update). Herbruikbare Action: `.github/workflows/reusable-bunny-image.yml`.
 
 In de app:
 
