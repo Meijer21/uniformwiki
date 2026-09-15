@@ -101,7 +101,7 @@ export function parseHashtags(body: string): string[] {
 
 export function articleTags(article: ArticleRow): string[] {
   const meta = parseStoredMetadata(article.metadata);
-  return splitList([meta.trefwoorden, meta.tags].filter(Boolean).join(", ")).concat(parseHashtags(article.body));
+  return uniqueLabels(splitList([meta.trefwoorden, meta.tags].filter(Boolean).join(", ")));
 }
 
 export function uniqueLabels(values: string[]): string[] {

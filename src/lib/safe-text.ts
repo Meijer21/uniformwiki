@@ -56,7 +56,10 @@ export function sanitizeWikiBody(input: string): string {
   text = text.replace(/(^|[^\w])\*([^*\n]+)\*(?!\w)/g, "$1$2");
   text = text.replace(/^>\s?/gm, "");
   text = text.replace(/^\|.*\|$/gm, "");
-  text = text.replace(/^(\s*)[*+]\s+/gm, "$1- ");
+  text = text.replace(/^[-–—*•▪◦]\s*\n(?=\S)/gm, "- ");
+  text = text.replace(/^(\s*)[*+•▪◦]\s+/gm, "$1- ");
+  text = text.replace(/^(\s*)[-–—](?=\S)/gm, "$1- ");
+  text = text.replace(/^(\s*)[-–—*+•]\s+/gm, "$1- ");
   text = text.replace(/\bjavascript:/gi, "");
   text = text.replace(/\bdata:text\/html/gi, "");
   text = text.replace(/\bhttps?:\/\/[^\s)]+/gi, "");

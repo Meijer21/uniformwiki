@@ -1,5 +1,6 @@
 import { config } from "../config.js";
 import { aiLabel, parseCitations, sourceBlock, type Citation } from "../lib/citations.js";
+import { assetUrl } from "../lib/assets.js";
 import { articleMatchesTheme, findGaps } from "../lib/gaps.js";
 import type { ArticleNeighborhood, GraphPayload, RelatedArticle } from "../lib/graph.js";
 import { articleDiensten, articleTags, buildLinkResolver } from "../lib/links.js";
@@ -7,7 +8,9 @@ import { escapeHtml, renderMarkdown } from "../lib/markdown.js";
 import { parseStoredMetadata } from "../lib/metadata.js";
 import { promosFor, type Promo, type PromoPlacement } from "../lib/promos.js";
 import { articleJsonLd, breadcrumbJsonLd, organizationJsonLd } from "../lib/seo.js";
-import { KOLOMMEN, type Kolom, type Thema } from "../lib/taxonomy.js";
+import { slugify } from "../lib/slug.js";
+import { KOLOMMEN, type Thema } from "../lib/taxonomy.js";
+import type { PublicColumn } from "../lib/columns.js";
 import type { ApiKeyRow, ArticleRow, RevisionRow, VocabRow } from "../types.js";
 
 export interface PageOptions {
@@ -36,6 +39,7 @@ export interface ContributeValues {
   error?: string;
   locked?: boolean;
   categoryNew?: string;
+  dienstNew?: string;
   modus?: "aanpassen" | "aanvullen" | "nieuw";
 }
 
@@ -92,33 +96,40 @@ function stukkenLabel(count: number): string {
 }
 
 function crumbs(items: Array<{ href?: string; label: string }>): string {
-  return `<nav class="crumbs" aria-label="Pad">${items
+  return `<nav aria-label="Pad"><ol class="crumbs">${items
     .map((item, index) => {
       const last = index === items.length - 1;
       const node =
         item.href && !last
           ? `<a href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a>`
           : `<span${last ? ' aria-current="page"' : ""}>${escapeHtml(item.label)}</span>`;
-      const sep = index === 0 ? "" : `<span class="crumbs-sep" aria-hidden="true">/</span>`;
-      return `${sep}${node}`;
+      return `<li>${node}</li>`;
     })
-    .join("")}</nav>`;
+    .join("")}</ol></nav>`;
+}
+
+function pickList(rows: string, label: string): string {
+  return `<ul class="pick-list" aria-label="${escapeHtml(label)}">${rows}</ul>`;
 }
 
 function chooseRow(href: string, title: string, text: string, meta: string): string {
-  return `<a class="choose-row" href="${escapeHtml(href)}">
-    <span class="choose-copy">
-      <span class="choose-title">${escapeHtml(title)}</span>
-      <span class="choose-text">${escapeHtml(text)}</span>
+  return `<li><a class="pick-item" href="${escapeHtml(href)}">
+    <span class="pick-main">
+      <span class="pick-title">${escapeHtml(title)}</span>
+      <span class="pick-sub">${escapeHtml(text)}</span>
     </span>
-    <span class="choose-meta">${escapeHtml(meta)}</span>
-    <span class="choose-go" aria-hidden="true">›</span>
-  </a>`;
+    <span class="pick-meta">${escapeHtml(meta)}</span>
+    <span class="pick-go" aria-hidden="true">›</span>
+  </a></li>`;
 }
 
 function articleTeaser(article: ArticleRow): string {
+  const dienst = articleDiensten(article)[0];
+  const dienstLink = dienst
+    ? `<a class="tag" href="/dienst/${encodeURIComponent(slugify(dienst))}">${escapeHtml(dienst)}</a>`
+    : `<a class="tag" href="/tag/${encodeURIComponent(slugify(article.category))}">${escapeHtml(article.category)}</a>`;
   return `<article class="article-teaser">
-    <span class="tag">${escapeHtml(article.dienst || article.category)}</span>
+    ${dienstLink}
     <h2><a href="/wiki/${encodeURIComponent(article.slug)}">${escapeHtml(article.title)}</a></h2>
     <p>${escapeHtml(article.summary)}</p>
   </article>`;
@@ -155,7 +166,9 @@ export function layout(options: PageOptions, content: string): string {
     options.title === config.siteName ? config.siteName : `${options.title} · ${config.siteName}`;
   const jsonLd = options.jsonLd ? JSON.stringify(options.jsonLd) : "";
   const noindex = options.path.startsWith("/beheer") || options.path === "/fout";
-  const scripts = (options.scripts ?? []).map((src) => `<script src="${src}" defer></script>`).join("\n");
+  const scripts = (options.scripts ?? [])
+    .map((src) => `<script src="${escapeHtml(assetUrl(src))}" defer></script>`)
+    .join("\n");
   const jsonBlock = options.jsonBlock
     ? `<script type="application/json" id="${escapeHtml(options.jsonBlock.id)}">${options.jsonBlock.json.replace(/</g, "\\u003c")}</script>`
     : "";
@@ -167,7 +180,7 @@ export function layout(options: PageOptions, content: string): string {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(pageTitle)}</title>
     <meta name="description" content="${escapeHtml(options.description)}" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#202124" />
     <link rel="canonical" href="${escapeHtml(absoluteUrl(options.path))}" />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="nl_NL" />
@@ -183,7 +196,7 @@ export function layout(options: PageOptions, content: string): string {
     ${options.markdownUrl ? `<link rel="alternate" type="text/markdown" title="Markdown" href="${escapeHtml(absoluteUrl(options.markdownUrl))}" />` : ""}
     <link rel="preconnect" href="https://fonts.bunny.net" />
     <link href="https://fonts.bunny.net/css2?family=Inter:wght@300;400;500;600&amp;family=Roboto+Condensed:wght@400;700;900&amp;display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/assets/thisline.css" />
+    <link rel="stylesheet" href="${escapeHtml(assetUrl("/assets/thisline.css"))}" />
     ${jsonLd ? `<script type="application/ld+json">${jsonLd}</script>` : ""}
     ${jsonBlock}
     ${scripts}
@@ -197,13 +210,16 @@ export function layout(options: PageOptions, content: string): string {
           <span class="wordmark-payoff">Voor wie naar voren stapt.</span>
           <span class="wordmark-product">UniformWiki</span>
         </a>
-        <nav class="nav">
-          ${navLink("/", "Overzicht", options.path)}
-          ${navLink("/kennisweb", "KennisWeb", options.path)}
-          ${navLink("/aanvullen", "Aanvullen", options.path)}
+        <nav class="nav" aria-label="Hoofd">
+          ${navLink("/", "Start", options.path)}
           ${navLink("/bijdragen", "Schrijven", options.path)}
-          ${navLink("/privacy", "Privacy", options.path)}
+          ${navLink("/kennisweb", "Samenhang", options.path)}
         </nav>
+        <form class="header-search" method="get" action="/" role="search">
+          <label class="skip" for="q-top">Zoeken</label>
+          <input class="input" id="q-top" type="search" name="q" placeholder="Zoeken" enterkeyhint="search" />
+          <button class="btn btn-primary btn-sm" type="submit">Zoek</button>
+        </form>
       </div>
       <div class="tl-rule"></div>
     </header>
@@ -227,21 +243,22 @@ export function layout(options: PageOptions, content: string): string {
 }
 
 export function homePage(
+  columns: PublicColumn[],
   articles: ArticleRow[],
   query: string,
   notice?: string,
 ): string {
   const searching = query.trim().length > 0;
-  const results = searching
-    ? articles
-    : [];
+  const results = searching ? articles : [];
   const empty = searching && results.length === 0;
-  const kolomRows = KOLOMMEN.map((kolom) => {
-    const count = articles.filter((article) =>
-      articleDiensten(article).some((dienst) => dienst.toLowerCase() === kolom.label.toLowerCase()),
-    ).length;
-    return chooseRow(`/dienst/${encodeURIComponent(kolom.id)}`, kolom.label, kolom.summary, stukkenLabel(count));
-  }).join("");
+  const kolomRows = columns
+    .map((kolom) => {
+      const count = articles.filter((article) =>
+        articleDiensten(article).some((dienst) => dienst.toLowerCase() === kolom.label.toLowerCase()),
+      ).length;
+      return chooseRow(`/dienst/${encodeURIComponent(kolom.id)}`, kolom.label, kolom.summary, stukkenLabel(count));
+    })
+    .join("");
   const resultList = results.map(articleTeaser).join("");
 
   if (searching) {
@@ -253,7 +270,7 @@ export function homePage(
       },
       `
     <div class="home-start">
-      ${crumbs([{ href: "/", label: "Kolommen" }, { label: "Zoeken" }])}
+      ${crumbs([{ href: "/", label: "Start" }, { label: "Zoeken" }])}
       <section>
         <h1>Resultaten</h1>
         <p class="lead">Voor “${escapeHtml(query)}”.</p>
@@ -261,7 +278,7 @@ export function homePage(
       ${notice ? `<p class="ok">${escapeHtml(notice)}</p>` : ""}
       ${searchForm(query, "Zoeken")}
       <section class="mt-6" aria-live="polite">
-        ${empty ? `<div class="empty">Niets gevonden. Kies een kolom of <a href="/bijdragen">schrijf de pagina</a>.</div>` : `<div class="article-list">${resultList}</div>`}
+        ${empty ? `<div class="empty">Niets gevonden. Kies een dienst of <a href="/bijdragen">schrijf de pagina</a>.</div>` : `<div class="article-list">${resultList}</div>`}
       </section>
     </div>
     ${sponsorLine()}`,
@@ -271,19 +288,19 @@ export function homePage(
   return layout(
     {
       title: config.siteName,
-      description: "Kies eerst een kolom: brandweer, ambulance, politie, defensie of handhaving. Daarna een thema, daarna het artikel.",
+      description: "Kies eerst een dienst. Daarna een thema, daarna het artikel.",
       path: "/",
       jsonLd: organizationJsonLd(),
     },
     `
     <div class="home-start">
       <section>
-        <p class="eyebrow">Open kennisbank</p>
-        <h1>Welke kolom?</h1>
-        <p class="lead">Kies één dienst. Daarna volgt het thema. Daarna het artikel.</p>
+        <p class="eyebrow">UniformWiki</p>
+        <h1>Welke dienst?</h1>
+        <p class="lead">Eén keuze. Daarna volgt het thema. Daarna het artikel.</p>
       </section>
       ${notice ? `<p class="ok">${escapeHtml(notice)}</p>` : ""}
-      <nav class="choose-list" aria-label="Kolommen">${kolomRows}</nav>
+      ${pickList(kolomRows, "Diensten")}
       ${searchForm("")}
     </div>
     ${sponsorLine()}`,
@@ -302,10 +319,10 @@ export function articlePage(
   const sources = sourceBlock(metadata.bronnen, metadata.ai);
   const resolve = buildLinkResolver(allArticles);
   const tags = neighborhood.tags
-    .map((tag) => `<a class="chip" href="/tag/${encodeURIComponent(tag.toLowerCase().replace(/\s+/g, "-"))}">${escapeHtml(tag)}</a>`)
+    .map((tag) => `<a class="chip" href="/tag/${encodeURIComponent(slugify(tag))}">${escapeHtml(tag)}</a>`)
     .join("");
   const diensten = neighborhood.diensten
-    .map((dienst) => `<a class="chip" href="/dienst/${encodeURIComponent(dienst.toLowerCase())}">${escapeHtml(dienst)}</a>`)
+    .map((dienst) => `<a class="chip" href="/dienst/${encodeURIComponent(slugify(dienst))}">${escapeHtml(dienst)}</a>`)
     .join("");
   const related = neighborhood.related
     .map(
@@ -367,11 +384,12 @@ export function articlePage(
           <p class="ai-note ${sources.missingAi ? "is-missing" : ""}">${escapeHtml(aiLabel(sources.ai))}</p>
         </section>
         <section class="kennisweb-block">
-          <p class="eyebrow">KennisWeb</p>
-          <h2>Wat hierbij hoort</h2>
-          <p class="hint">Koppel zelf een artikel. De koppeling gaat eerst langs keuring.</p>
-          <p id="kennisweb-leeg" class="empty" hidden>Nog te weinig koppelingen voor dit stuk.</p>
-          <div class="graph-wrap graph-wrap-article"><canvas id="kennisweb" width="1100" height="360" aria-label="KennisWeb"></canvas></div>
+          <details>
+            <summary>Samenhang bekijken</summary>
+            <p class="hint mt-3">Koppel zelf een artikel. De koppeling gaat eerst langs keuring.</p>
+            <p id="kennisweb-leeg" class="empty" hidden>Nog te weinig koppelingen voor dit stuk.</p>
+            <div class="graph-wrap graph-wrap-article"><canvas id="kennisweb" width="1100" height="360" aria-label="Samenhang"></canvas></div>
+          </details>
           <form method="post" action="/wiki/${encodeURIComponent(article.slug)}/koppel" class="koppel-form">
             <label class="field" style="flex:1">
               <span class="field-label">Koppel een artikel</span>
@@ -432,15 +450,18 @@ export function contributePage(values: ContributeValues, options: ContributeOpti
   const tagButtons = options.tags
     .map((tag) => {
       const on = selectedTags.some((item) => item.toLowerCase() === tag.toLowerCase());
-      return `<button type="button" class="chip-toggle${on ? " is-on" : ""}" data-tag="${escapeHtml(tag)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(tag)}</button>`;
+      return `<label class="md-check"><input type="checkbox" name="tag" value="${escapeHtml(tag)}"${on ? " checked" : ""} /> ${escapeHtml(tag)}</label>`;
     })
     .join("");
-  const diensten = ["", ...options.diensten]
-    .map((item) => {
+  const knownDienst = options.diensten.some((item) => item.toLowerCase() === (values.dienst ?? "").toLowerCase());
+  const diensten = [
+    `<option value="">Kies een dienst</option>`,
+    ...options.diensten.map((item) => {
       const selected = (values.dienst ?? "") === item ? " selected" : "";
-      return `<option value="${escapeHtml(item)}"${selected}>${item || "Kies een kolom"}</option>`;
-    })
-    .join("");
+      return `<option value="${escapeHtml(item)}"${selected}>${escapeHtml(item)}</option>`;
+    }),
+    `<option value="__nieuw__"${values.dienst && !knownDienst ? " selected" : ""}>Andere dienst, voorstellen</option>`,
+  ].join("");
   const knownCategory = options.categories.some(
     (item) => item.toLowerCase() === (values.category ?? "").toLowerCase(),
   );
@@ -494,23 +515,32 @@ export function contributePage(values: ContributeValues, options: ContributeOpti
         <label class="field"><span class="field-label">Titel</span>
           <input class="input" name="title" id="title" required maxlength="180" value="${escapeHtml(values.title ?? "")}" ${locked ? "readonly" : ""} />
         </label>
-        <label class="field"><span class="field-label">Kolom</span><select class="input" name="dienst" required>${diensten}</select></label>
-        <label class="field"><span class="field-label">Categorie</span>
+        <div class="field field-switch">
+          <label class="field-label" for="dienst">Dienst</label>
+          <select class="input" name="dienst" id="dienst" required>${diensten}</select>
+          <div class="when-new" id="dienst-new-wrap">
+            <label class="field-label" for="dienst_new">Nieuwe dienst</label>
+            <input class="input" name="dienst_new" id="dienst_new" maxlength="80" value="${escapeHtml(values.dienstNew ?? (!knownDienst ? (values.dienst ?? "") : ""))}" placeholder="Bijvoorbeeld Kustwacht" />
+            <span class="hint">Die ziet een ander pas in de lijst na keuring.</span>
+          </div>
+        </div>
+        <div class="field field-switch">
+          <label class="field-label" for="category">Categorie</label>
           <select class="input" name="category" id="category" required>${categoryOptions}</select>
-        </label>
-        <label class="field" id="category-new-wrap" ${values.category && !knownCategory ? "" : "hidden"}>
-          <span class="field-label">Nieuwe categorie</span>
-          <input class="input" name="category_new" id="category_new" maxlength="80" value="${escapeHtml(values.categoryNew ?? (!knownCategory ? (values.category ?? "") : ""))}" placeholder="Bijvoorbeeld Uitrusting" />
-          <span class="hint">Die ziet een ander pas in de lijst na keuring.</span>
-        </label>
+          <div class="when-new" id="category-new-wrap">
+            <label class="field-label" for="category_new">Nieuwe categorie</label>
+            <input class="input" name="category_new" id="category_new" maxlength="80" value="${escapeHtml(values.categoryNew ?? (!knownCategory ? (values.category ?? "") : ""))}" placeholder="Bijvoorbeeld Uitrusting" />
+            <span class="hint">Die ziet een ander pas in de lijst na keuring.</span>
+          </div>
+        </div>
         <div class="field">
           <span class="field-label">Tags</span>
           <div class="chip-pick" id="tag-pick">${tagButtons}</div>
           <div class="tag-add mt-3">
-            <input class="input" id="tag-new" maxlength="40" placeholder="Nieuwe tag voorstellen" />
+            <input class="input" id="tag-new" name="tag_new" maxlength="40" placeholder="Nieuwe tag voorstellen" />
             <button class="btn btn-secondary" type="button" id="tag-add">Toevoegen</button>
           </div>
-          <span class="hint">Kies uit de lijst. Een nieuwe tag keurt een beheerder eerst.</span>
+          <span class="hint">Vink aan wat past. Een nieuwe tag keurt een beheerder eerst.</span>
         </div>
         <label class="field"><span class="field-label">Korte samenvatting</span><textarea class="textarea" name="summary" rows="2">${escapeHtml(values.summary ?? "")}</textarea></label>
         <div class="field mention-wrap">
@@ -624,7 +654,33 @@ export function graphPage(payload: { nodes: unknown[]; edges: unknown[] }, focus
   );
 }
 
-export function dienstPage(kolom: Kolom, articles: ArticleRow[]): string {
+export function dienstPage(kolom: PublicColumn, articles: ArticleRow[]): string {
+  if (kolom.themes.length === 0) {
+    const list = articles.map(articleTeaser).join("");
+    return layout(
+      {
+        title: kolom.label,
+        description: kolom.summary,
+        path: `/dienst/${kolom.id}`,
+        jsonLd: breadcrumbJsonLd([
+          { name: "Start", path: "/" },
+          { name: kolom.label, path: `/dienst/${kolom.id}` },
+        ]),
+      },
+      `
+    <div class="home-start">
+      ${crumbs([{ href: "/", label: "Start" }, { label: kolom.label }])}
+      <section>
+        <p class="eyebrow">Dienst</p>
+        <h1>${escapeHtml(kolom.label)}</h1>
+        <p class="lead">${escapeHtml(kolom.summary)}</p>
+      </section>
+      <section class="mt-6">${list || `<div class="empty">Nog geen goedgekeurde stukken. <a href="/bijdragen?dienst=${encodeURIComponent(kolom.label)}">Schrijf het eerste</a>.</div>`}</section>
+      <p class="chooser-back"><a href="/">Andere dienst</a></p>
+    </div>
+    ${sponsorLine()}`,
+    );
+  }
   const rows = kolom.themes
     .map((theme) => {
       const count = articles.filter((article) => articleMatchesTheme(article, theme)).length;
@@ -642,26 +698,26 @@ export function dienstPage(kolom: Kolom, articles: ArticleRow[]): string {
       description: `${kolom.summary} Kies een thema.`,
       path: `/dienst/${kolom.id}`,
       jsonLd: breadcrumbJsonLd([
-        { name: "Kolommen", path: "/" },
+        { name: "Start", path: "/" },
         { name: kolom.label, path: `/dienst/${kolom.id}` },
       ]),
     },
     `
     <div class="home-start">
-      ${crumbs([{ href: "/", label: "Kolommen" }, { label: kolom.label }])}
+      ${crumbs([{ href: "/", label: "Start" }, { label: kolom.label }])}
       <section>
-        <p class="eyebrow">Kolom</p>
+        <p class="eyebrow">${escapeHtml(kolom.label)}</p>
         <h1>Welk thema?</h1>
         <p class="lead">${escapeHtml(kolom.summary)}</p>
       </section>
-      <nav class="choose-list" aria-label="Thema’s in ${escapeHtml(kolom.label)}">${rows}</nav>
-      <p class="chooser-back"><a href="/">Andere kolom</a></p>
+      ${pickList(rows, `Thema’s in ${kolom.label}`)}
+      <p class="chooser-back"><a href="/">Andere dienst</a></p>
     </div>
     ${sponsorLine()}`,
   );
 }
 
-export function themePage(kolom: Kolom, theme: Thema, articles: ArticleRow[]): string {
+export function themePage(kolom: PublicColumn, theme: Thema, articles: ArticleRow[]): string {
   const list = articles.map(articleTeaser).join("");
   const empty = articles.length === 0;
   return layout(
@@ -670,7 +726,7 @@ export function themePage(kolom: Kolom, theme: Thema, articles: ArticleRow[]): s
       description: theme.summary,
       path: `/dienst/${kolom.id}/${theme.slug}`,
       jsonLd: breadcrumbJsonLd([
-        { name: "Kolommen", path: "/" },
+        { name: "Start", path: "/" },
         { name: kolom.label, path: `/dienst/${kolom.id}` },
         { name: theme.title, path: `/dienst/${kolom.id}/${theme.slug}` },
       ]),
@@ -678,7 +734,7 @@ export function themePage(kolom: Kolom, theme: Thema, articles: ArticleRow[]): s
     `
     <div class="home-start">
       ${crumbs([
-        { href: "/", label: "Kolommen" },
+        { href: "/", label: "Start" },
         { href: `/dienst/${kolom.id}`, label: kolom.label },
         { label: theme.title },
       ])}
@@ -699,7 +755,6 @@ export function themePage(kolom: Kolom, theme: Thema, articles: ArticleRow[]): s
       </section>
       <p class="chooser-back"><a href="/dienst/${encodeURIComponent(kolom.id)}">Ander thema</a></p>
     </div>
-    ${promoRow("article", kolom.label)}
     ${sponsorLine()}`,
   );
 }

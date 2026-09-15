@@ -212,7 +212,7 @@ export async function writeArticle(input: WikiWriteInput, asApproved: boolean): 
   if (asApproved) {
     await approveTermsFromText(clean.category, dienst, tags);
   } else {
-    await proposeUnknownTerms(clean.category, tags);
+    await proposeUnknownTerms(clean.category, dienst, tags);
   }
   return { article: updated, revision, created };
 }

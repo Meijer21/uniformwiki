@@ -42,7 +42,7 @@ export const GRAPH_JS = `(function () {
   function resize() {
     var rect = canvas.getBoundingClientRect();
     W = Math.max(320, rect.width);
-    H = Math.max(420, rect.height || 520);
+    H = Math.max(280, rect.height || 420);
     canvas.width = W * dpr;
     canvas.height = H * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -232,6 +232,11 @@ export const GRAPH_JS = `(function () {
   }, { passive: false });
 
   window.addEventListener("resize", resize);
+  document.querySelectorAll("details").forEach(function (el) {
+    el.addEventListener("toggle", function () {
+      if (el.open) resize();
+    });
+  });
   resize();
   loop();
 })();

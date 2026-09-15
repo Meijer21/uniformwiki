@@ -6,8 +6,9 @@ export const CONTRIBUTE_JS = `(function () {
   var slug = document.getElementById("slug");
   var locked = form.getAttribute("data-vast") === "1";
   var category = document.getElementById("category");
-  var categoryNewWrap = document.getElementById("category-new-wrap");
   var categoryNew = document.getElementById("category_new");
+  var dienst = document.getElementById("dienst");
+  var dienstNew = document.getElementById("dienst_new");
   var tagsValue = document.getElementById("tags");
   var tagPick = document.getElementById("tag-pick");
   var tagNew = document.getElementById("tag-new");
@@ -46,21 +47,25 @@ export const CONTRIBUTE_JS = `(function () {
     if (!locked) syncSlug();
   }
 
-  function toggleCategoryNew() {
-    if (!category || !categoryNewWrap) return;
-    var show = category.value === "__nieuw__";
-    categoryNewWrap.hidden = !show;
-    if (categoryNew) {
-      categoryNew.required = show;
-      if (show) categoryNew.focus();
-    }
-  }
   if (category) {
-    category.addEventListener("change", toggleCategoryNew);
-    toggleCategoryNew();
+    category.addEventListener("change", function () {
+      if (category.value === "__nieuw__" && categoryNew) categoryNew.focus();
+    });
+  }
+  if (dienst) {
+    dienst.addEventListener("change", function () {
+      if (dienst.value === "__nieuw__" && dienstNew) dienstNew.focus();
+    });
   }
 
   function selectedTags() {
+    var fromBoxes = [];
+    if (tagPick) {
+      tagPick.querySelectorAll('input[name="tag"]:checked').forEach(function (box) {
+        fromBoxes.push(box.value);
+      });
+    }
+    if (fromBoxes.length) return fromBoxes;
     if (!tagsValue) return [];
     return tagsValue.value.split(",").map(function (part) { return part.trim(); }).filter(Boolean);
   }
@@ -76,46 +81,21 @@ export const CONTRIBUTE_JS = `(function () {
     });
     if (tagsValue) tagsValue.value = out.join(", ");
     if (!tagPick) return;
-    var buttons = tagPick.querySelectorAll("[data-tag]");
-    buttons.forEach(function (btn) {
-      var label = btn.getAttribute("data-tag") || "";
-      var on = out.some(function (item) { return item.toLowerCase() === label.toLowerCase(); });
-      btn.classList.toggle("is-on", on);
-      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    var boxes = tagPick.querySelectorAll('input[name="tag"]');
+    boxes.forEach(function (box) {
+      box.checked = out.some(function (item) { return item.toLowerCase() === box.value.toLowerCase(); });
     });
-    var extra = tagPick.querySelectorAll("[data-extra]");
-    extra.forEach(function (node) { node.remove(); });
     out.forEach(function (item) {
       var exists = false;
-      buttons.forEach(function (btn) {
-        if ((btn.getAttribute("data-tag") || "").toLowerCase() === item.toLowerCase()) exists = true;
+      boxes.forEach(function (box) {
+        if (box.value.toLowerCase() === item.toLowerCase()) exists = true;
       });
       if (exists) return;
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "chip-toggle is-on is-new";
-      btn.setAttribute("data-tag", item);
-      btn.setAttribute("data-extra", "1");
-      btn.setAttribute("aria-pressed", "true");
-      btn.textContent = item + " (wacht op keuring)";
-      tagPick.appendChild(btn);
+      var label = document.createElement("label");
+      label.className = "md-check";
+      label.innerHTML = '<input type="checkbox" name="tag" value="' + item.replace(/"/g, "&quot;") + '" checked /> ' + item.replace(/</g, "&lt;") + " (wacht op keuring)";
+      tagPick.appendChild(label);
     });
-  }
-
-  if (tagPick) {
-    tagPick.addEventListener("click", function (event) {
-      var btn = event.target.closest("[data-tag]");
-      if (!btn) return;
-      var label = btn.getAttribute("data-tag") || "";
-      var current = selectedTags();
-      var on = current.some(function (item) { return item.toLowerCase() === label.toLowerCase(); });
-      if (on) {
-        setTags(current.filter(function (item) { return item.toLowerCase() !== label.toLowerCase(); }));
-      } else {
-        setTags(current.concat([label]));
-      }
-    });
-    setTags(selectedTags());
   }
 
   function addNewTag() {
@@ -171,7 +151,11 @@ export const CONTRIBUTE_JS = `(function () {
         inputs[inputs.length - 1].focus();
       });
     }
-    form.addEventListener("submit", syncBronnen);
+    form.addEventListener("submit", function () {
+      var extra = tagNew && tagNew.value.trim() ? [tagNew.value.trim()] : [];
+      setTags(selectedTags().concat(extra));
+      syncBronnen();
+    });
     syncBronnen();
   }
 
@@ -242,7 +226,8 @@ export const CONTRIBUTE_JS = `(function () {
       return !query || String(item.label || "").toLowerCase().indexOf(query) !== -1;
     }).slice(0, 8);
     if (!hits.length) {
-      hideMentions();
+      mentionMenu.innerHTML = '<button type="button" class="mention-item is-active" data-insert=""><span>Geen artikel gevonden</span><em>typ verder</em></button>';
+      mentionMenu.hidden = false;
       return;
     }
     mentionMenu.innerHTML = hits.map(function (item, index) {
@@ -254,7 +239,7 @@ export const CONTRIBUTE_JS = `(function () {
   }
 
   function insertMention(text) {
-    if (!body) return;
+    if (!body || !text) return;
     var found = atQuery(body);
     if (!found) return;
     var value = body.value;

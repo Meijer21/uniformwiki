@@ -15,10 +15,16 @@ export function articleMatchesTheme(
   article: ArticleRow,
   theme: { slug: string; title: string },
 ): boolean {
-  const needle = theme.title.toLowerCase();
-  const slug = theme.slug.toLowerCase();
-  const hay = `${article.title} ${article.slug} ${article.summary} ${article.body}`.toLowerCase();
-  return article.slug === theme.slug || hay.includes(needle) || hay.includes(slug.replace(/-/g, " "));
+  if (article.slug === theme.slug || slugify(article.title) === theme.slug) {
+    return true;
+  }
+  const title = article.title.toLowerCase();
+  const themeTitle = theme.title.toLowerCase();
+  if (title === themeTitle || title.includes(themeTitle) || themeTitle.includes(title)) {
+    return true;
+  }
+  const summary = article.summary.toLowerCase();
+  return summary.includes(themeTitle);
 }
 
 function covered(themeTitle: string, themeSlug: string, articles: ArticleRow[]): boolean {

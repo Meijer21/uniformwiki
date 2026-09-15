@@ -92,10 +92,16 @@ export async function approveTermsFromText(category: string, dienst: string, tag
   }
 }
 
-export async function proposeUnknownTerms(category: string, tags: string[]): Promise<void> {
+export async function proposeUnknownTerms(category: string, dienst: string, tags: string[]): Promise<void> {
   const knownCategory = await findVocab("category", category);
   if (!knownCategory || knownCategory.status !== "approved") {
     await proposeVocab("category", category);
+  }
+  if (dienst.trim()) {
+    const knownDienst = await findVocab("dienst", dienst);
+    if (!knownDienst || knownDienst.status !== "approved") {
+      await proposeVocab("dienst", dienst);
+    }
   }
   for (const tag of tags) {
     const known = await findVocab("tag", tag);

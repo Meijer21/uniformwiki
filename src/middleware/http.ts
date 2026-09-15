@@ -42,21 +42,21 @@ export function registerHttpGuards(app: FastifyInstance): void {
   app.get("/assets/thisline.css", async (_request, reply) => {
     return reply
       .header("content-type", "text/css; charset=utf-8")
-      .header("cache-control", "public, max-age=86400, stale-while-revalidate=604800")
+      .header("cache-control", "public, max-age=3600, stale-while-revalidate=86400")
       .send(THISLINE_CSS);
   });
 
   app.get("/assets/graph.js", async (_request, reply) => {
     return reply
       .header("content-type", "application/javascript; charset=utf-8")
-      .header("cache-control", "public, max-age=86400, stale-while-revalidate=604800")
+      .header("cache-control", "public, max-age=3600, stale-while-revalidate=86400")
       .send(GRAPH_JS);
   });
 
   app.get("/assets/contribute.js", async (_request, reply) => {
     return reply
       .header("content-type", "application/javascript; charset=utf-8")
-      .header("cache-control", "public, max-age=86400, stale-while-revalidate=604800")
+      .header("cache-control", "public, max-age=3600, stale-while-revalidate=86400")
       .send(CONTRIBUTE_JS);
   });
 
@@ -120,7 +120,7 @@ export function registerHttpGuards(app: FastifyInstance): void {
       return payload;
     }
     if (path.startsWith("/assets/")) {
-      reply.header("cache-control", "public, max-age=86400, stale-while-revalidate=604800");
+      reply.header("cache-control", "public, max-age=3600, stale-while-revalidate=86400");
       return payload;
     }
     reply.header("cache-control", "public, s-maxage=120, stale-while-revalidate=600");

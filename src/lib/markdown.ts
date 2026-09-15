@@ -69,13 +69,13 @@ export function renderMarkdown(source: string, resolveLink?: LinkResolver): stri
       html.push(`<p><strong>${formatInline(heading[2], resolveLink)}</strong></p>`);
       continue;
     }
-    const ul = line.match(/^[-*]\s+(.+)$/);
-    if (ul) {
+    const ul = line.match(/^\s*[-–—*+•▪◦]\s+(.*)$/) || line.match(/^\s*[-–—*+•▪◦](?!\s)(.+)$/);
+    if (ul && !/^---+$/.test(line.trim())) {
       if (listType !== "ul") {
         flushList();
         listType = "ul";
       }
-      list.push(ul[1]);
+      list.push(ul[1].trim());
       continue;
     }
     const ol = line.match(/^\d+\.\s+(.+)$/);
