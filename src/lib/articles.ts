@@ -7,6 +7,7 @@ import type {
   RevisionRow,
   WikiWriteInput,
 } from "../types.js";
+import { articleDiensten, articleTags, mergeTagLists } from "./links.js";
 import { metadataToJson, parseMetadataBlock, parseStoredMetadata } from "./metadata.js";
 import { slugify, uniqueSlug } from "./slug.js";
 
@@ -25,11 +26,39 @@ function sanitizeInput(input: WikiWriteInput): WikiWriteInput {
       summary: input.summary.trim(),
       body: input.body,
       slug: input.slug?.trim(),
+      dienst: (input.dienst ?? "").trim(),
+      tags: (input.tags ?? "").trim(),
+      bronnen: (input.bronnen ?? "").trim(),
+      aiOrigin: (input.aiOrigin ?? "").trim(),
       contributorName: (input.contributorName ?? "anoniem").trim() || "anoniem",
       contributorNote: (input.contributorNote ?? "").trim(),
     },
-    ["title", "category", "summary", "body", "contributorName", "contributorNote"],
+    [
+      "title",
+      "category",
+      "summary",
+      "body",
+      "dienst",
+      "tags",
+      "bronnen",
+      "contributorName",
+      "contributorNote",
+    ],
   );
+}
+
+function mergedMetadata(clean: WikiWriteInput, parsed: ReturnType<typeof parseMetadataBlock>) {
+  const metadata = { ...parsed.metadata };
+  metadata.trefwoorden = mergeTagLists(clean.tags, metadata.trefwoorden, metadata.tags);
+  metadata.dienst = mergeTagLists(clean.dienst, metadata.dienst, metadata.diensten);
+  metadata.bronnen = clean.bronnen || metadata.bronnen || "";
+  if (clean.aiOrigin) {
+    metadata.ai = clean.aiOrigin;
+  }
+  if (!metadata.licentie) {
+    metadata.licentie = "CC-BY-SA-4.0";
+  }
+  return metadata;
 }
 
 export async function listCategories(): Promise<CategoryCount[]> {
@@ -46,9 +75,9 @@ export async function listApprovedArticles(query?: string, category?: string): P
   const clauses = ["status = 'approved'"];
   const params: unknown[] = [];
   if (query) {
-    clauses.push("(title LIKE ? OR summary LIKE ? OR body LIKE ? OR category LIKE ?)");
+    clauses.push("(title LIKE ? OR summary LIKE ? OR body LIKE ? OR category LIKE ? OR dienst LIKE ? OR metadata LIKE ?)");
     const like = `%${query}%`;
-    params.push(like, like, like, like);
+    params.push(like, like, like, like, like, like);
   }
   if (category) {
     clauses.push("category = ?");
@@ -107,9 +136,11 @@ export async function writeArticle(input: WikiWriteInput, asApproved: boolean): 
   }
 
   const parsed = parseMetadataBlock(clean.body);
-  const metadata = metadataToJson(parsed.metadata);
+  const metadataObj = mergedMetadata(clean, parsed);
+  const metadata = metadataToJson(metadataObj);
   const body = parsed.body;
   const summary = clean.summary || body.slice(0, 180).replace(/\s+/g, " ");
+  const dienst = metadataObj.dienst ?? "";
   const status: ArticleStatus = asApproved ? "approved" : "pending";
   const revisionStatus = asApproved ? "approved" : "pending";
 
@@ -128,9 +159,9 @@ export async function writeArticle(input: WikiWriteInput, asApproved: boolean): 
   if (!article) {
     const slug = await uniqueSlug(clean.slug || clean.title, slugTaken);
     const inserted = await dbRun(
-      `INSERT INTO articles (slug, title, category, summary, body, metadata, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [slug, clean.title, clean.category, summary, body, metadata, status],
+      `INSERT INTO articles (slug, title, category, dienst, summary, body, metadata, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [slug, clean.title, clean.category, dienst, summary, body, metadata, status],
     );
     article = await dbGet<ArticleRow>("SELECT * FROM articles WHERE id = ?", [inserted.lastID]);
     if (!article) {
@@ -159,10 +190,10 @@ export async function writeArticle(input: WikiWriteInput, asApproved: boolean): 
   if (asApproved) {
     await dbRun(
       `UPDATE articles
-       SET title = ?, category = ?, summary = ?, body = ?, metadata = ?,
+       SET title = ?, category = ?, dienst = ?, summary = ?, body = ?, metadata = ?,
            status = 'approved', active_revision_id = ?, updated_at = datetime('now')
        WHERE id = ?`,
-      [clean.title, clean.category, summary, body, metadata, revisionInsert.lastID, article.id],
+      [clean.title, clean.category, dienst, summary, body, metadata, revisionInsert.lastID, article.id],
     );
   } else if (created) {
     await dbRun("UPDATE articles SET updated_at = datetime('now') WHERE id = ?", [article.id]);
@@ -192,12 +223,13 @@ export async function setRevisionDecision(revisionId: number, decision: "approve
   if (decision === "approved") {
     await dbRun(
       `UPDATE articles
-       SET title = ?, category = ?, summary = ?, body = ?, metadata = ?,
+       SET title = ?, category = ?, dienst = ?, summary = ?, body = ?, metadata = ?,
            status = 'approved', active_revision_id = ?, updated_at = datetime('now')
        WHERE id = ?`,
       [
         revision.title,
         revision.category,
+        parseStoredMetadata(revision.metadata).dienst ?? "",
         revision.summary,
         revision.body,
         revision.metadata,
@@ -225,6 +257,9 @@ export function articlePublicJson(article: ArticleRow, revisions?: RevisionRow[]
     category: article.category,
     summary: article.summary,
     body: article.body,
+    dienst: article.dienst ?? "",
+    tags: articleTags(article),
+    diensten: articleDiensten(article),
     metadata: parseStoredMetadata(article.metadata),
     status: article.status,
     active_revision_id: article.active_revision_id,

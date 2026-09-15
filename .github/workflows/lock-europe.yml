@@ -1,0 +1,17 @@
+name: Lock wiki to Europe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Alleen wiki-pullzone 6571141, Europa, geen Shield
+        env:
+          BUNNYNET_API_KEY: ${{ secrets.BUNNYNET_API_KEY }}
+        run: node scripts/bunny-lock-europe.mjs

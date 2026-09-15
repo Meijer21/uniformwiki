@@ -3,7 +3,9 @@ import { dirname, resolve } from "node:path";
 import sqlite3 from "sqlite3";
 import { config } from "./config.js";
 import { keyPrefix } from "./lib/crypto.js";
-import { metadataToJson } from "./lib/metadata.js";
+import { mergeTagLists } from "./lib/links.js";
+import { metadataToJson, parseStoredMetadata } from "./lib/metadata.js";
+import { SEED_ARTICLES } from "./lib/seed.js";
 import type { ApiKeyRow, ArticleRow, RevisionRow } from "./types.js";
 
 let db: sqlite3.Database | null = null;
@@ -55,90 +57,6 @@ async function exec(sql: string): Promise<void> {
   await dbRun(sql);
 }
 
-const SEED_ARTICLES: Array<{
-  slug: string;
-  title: string;
-  category: string;
-  summary: string;
-  body: string;
-  metadata: Record<string, string>;
-}> = [
-  {
-    slug: "welkom-bij-uniformwiki",
-    title: "Welkom bij UniformWiki",
-    category: "Over",
-    summary: "Wat UniformWiki is, voor wie het is, en hoe mensen én AI-agents dezelfde kennis gebruiken.",
-    body: `UniformWiki is een lichte kennisbank over kledingvoorschriften, beroepskleding en uniformen. Artikelen zijn bedoeld voor twee lezers tegelijk: mensen die via Google of een bladwijzer binnenkomen, en AI-agents die via de API of MCP dezelfde goedgekeurde tekst opvragen.
-
-## Wat je hier vindt
-
-- Uitleg van begrippen, materialen en voorschriften
-- Praktische artikelen die je zonder account kunt verbeteren
-- Een beheerpagina waarop bijdragen worden nagekeken voordat ze live gaan
-
-## Wat je hier niet hoeft te doen
-
-Je hoeft geen Git, Markdown-editor of account te installeren. Een titel, een categorie en je tekst zijn genoeg. Persoonsgegevens zoals BSN, e-mailadressen en telefoonnummers worden automatisch uit bijdragen gehaald.
-
-## Voor uitgevers
-
-Toegang voor agents verkoop je later als licentie via FluentCart. De wiki zelf blijft leesbaar, zodat zoekmachines en bezoekers niet achter een muur belanden.`,
-    metadata: { licentie: "CC-BY-SA-4.0", trefwoorden: "uniformwiki, wiki, mcp" },
-  },
-  {
-    slug: "hoe-je-bijdraagt",
-    title: "Hoe je bijdraagt",
-    category: "Over",
-    summary: "Een bijdrage leveren zonder technische drempel: formulier, moderatie en wat er daarna gebeurt.",
-    body: `Iedereen mag een artikel voorstellen of een bestaande pagina aanvullen. Je hebt geen account nodig.
-
-## Nieuwe pagina
-
-1. Open **Bijdragen** in het menu
-2. Kies een duidelijke titel en een bestaande of nieuwe categorie
-3. Schrijf in gewone taal. Koppen mag je markeren met \`#\`, \`##\` of \`###\`
-4. Optioneel: zet bovenaan een metadata-blok
-
-\`\`\`
----
-bronnen: Inspectie SZW, 2024
-licentie: CC-BY-SA-4.0
-trefwoorden: hoge zichtbaarheid, EN ISO 20471
----
-\`\`\`
-
-## Wat er daarna gebeurt
-
-Een beheerder ziet je tekst onder **Beheer**. Na goedkeuring wordt jouw versie de actieve pagina en blijft de oude versie in de geschiedenis staan. Afgewezen teksten verdwijnen niet: ze blijven zichtbaar in het logboek van die pagina.
-
-## Bestaande pagina verbeteren
-
-Gebruik dezelfde titel of slug als het artikel dat je wilt aanvullen. Je bijdrage wordt een nieuwe revisie en overschrijft niets totdat iemand hem goedkeurt.`,
-    metadata: { licentie: "CC-BY-SA-4.0", trefwoorden: "bijdragen, moderatie" },
-  },
-  {
-    slug: "wat-is-een-uniform",
-    title: "Wat is een uniform?",
-    category: "Begrippen",
-    summary: "Een werkbare definitie: herkenbaarheid, voorschrift en het verschil met vrije beroepskleding.",
-    body: `Een uniform is kleding die een organisatie voorschrijft zodat de drager herkenbaar is als onderdeel van die organisatie. Het gaat niet alleen om kleur of logo. Een uniform legt meestal vast welke onderdelen verplicht zijn, wanneer ze gedragen worden en wat er níet bij mag.
-
-## Drie kenmerken
-
-1. **Herkenbaarheid** — collega's, burgers of patiënten zien in één oogopslag de rol
-2. **Voorschrift** — de werkgever of instantie bepaalt model, kleur en gebruik
-3. **Gelijkheid** — binnen dezelfde functie ziet de kleding er bewust hetzelfde uit
-
-## Wat het niet is
-
-Bedrijfskleding zonder dwingend model (bijvoorbeeld “draag iets donkers”) is geen uniform. Een veiligheidshesje dat iedereen op de bouwplaats over de eigen jas trekt, is wél een voorgeschreven laag, maar nog geen volledig uniform.
-
-## Waarom dit onderscheid telt
-
-Regelgeving, cao-afspraken en vergoedingen hangen vaak af van dit verschil. Zet in artikelen daarom altijd of iets *verplicht model*, *verplichte laag* of *advies* is.`,
-    metadata: { licentie: "CC-BY-SA-4.0", trefwoorden: "definitie, beroepskleding, voorschrift" },
-  },
-];
 
 async function seedAdminKey(): Promise<void> {
   const adminKey = config.adminApiKey;
@@ -167,26 +85,63 @@ async function seedAdminKey(): Promise<void> {
   );
 }
 
-async function seedArticles(): Promise<void> {
-  const row = await dbGet<{ count: number }>("SELECT COUNT(*) AS count FROM articles");
-  if ((row?.count ?? 0) > 0) {
-    return;
+async function migrateArticles(): Promise<void> {
+  const cols = await dbAll<Record<string, unknown>>("PRAGMA table_info(articles)");
+  const names = new Set(cols.map((col) => String(col.name ?? col.Name ?? "").toLowerCase()));
+  if (!names.has("dienst")) {
+    try {
+      await exec("ALTER TABLE articles ADD COLUMN dienst TEXT NOT NULL DEFAULT ''");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/duplicate column/i.test(message)) {
+        throw error;
+      }
+    }
   }
+  const rows = await dbAll<ArticleRow>("SELECT * FROM articles WHERE dienst IS NULL OR dienst = ''");
+  for (const row of rows) {
+    const dienst = mergeTagLists(parseStoredMetadata(row.metadata).dienst, parseStoredMetadata(row.metadata).diensten);
+    if (dienst) {
+      await dbRun("UPDATE articles SET dienst = ? WHERE id = ?", [dienst, row.id]);
+    }
+  }
+}
 
+async function seedArticles(): Promise<void> {
   for (const article of SEED_ARTICLES) {
+    const existing = await dbGet<ArticleRow>("SELECT * FROM articles WHERE slug = ?", [article.slug]);
+    if (existing) {
+      const needsOfficial =
+        existing.status !== "approved" || !existing.body.includes("[[") || !parseStoredMetadata(existing.metadata).bronnen;
+      if (needsOfficial) {
+        await dbRun(
+          `UPDATE articles SET title = ?, category = ?, dienst = ?, summary = ?, body = ?, metadata = ?, status = 'approved', updated_at = datetime('now') WHERE id = ?`,
+          [
+            article.title,
+            article.category,
+            article.dienst,
+            article.summary,
+            article.body,
+            metadataToJson(article.metadata),
+            existing.id,
+          ],
+        );
+      }
+      continue;
+    }
     const created = await dbRun(
-      `INSERT INTO articles (slug, title, category, summary, body, metadata, status)
-       VALUES (?, ?, ?, ?, ?, ?, 'approved')`,
+      `INSERT INTO articles (slug, title, category, dienst, summary, body, metadata, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'approved')`,
       [
         article.slug,
         article.title,
         article.category,
+        article.dienst,
         article.summary,
         article.body,
         metadataToJson(article.metadata),
       ],
     );
-
     const revision = await dbRun(
       `INSERT INTO article_revisions (
          article_id, title, summary, body, metadata, category,
@@ -201,11 +156,10 @@ async function seedArticles(): Promise<void> {
         article.category,
       ],
     );
-
-    await dbRun(
-      `UPDATE articles SET active_revision_id = ?, updated_at = datetime('now') WHERE id = ?`,
-      [revision.lastID, created.lastID],
-    );
+    await dbRun("UPDATE articles SET active_revision_id = ?, updated_at = datetime('now') WHERE id = ?", [
+      revision.lastID,
+      created.lastID,
+    ]);
   }
 }
 
@@ -233,6 +187,7 @@ export async function initDb(): Promise<void> {
       slug TEXT NOT NULL UNIQUE,
       title TEXT NOT NULL,
       category TEXT NOT NULL,
+      dienst TEXT NOT NULL DEFAULT '',
       summary TEXT NOT NULL DEFAULT '',
       body TEXT NOT NULL DEFAULT '',
       metadata TEXT NOT NULL DEFAULT '{}',
@@ -289,6 +244,8 @@ export async function initDb(): Promise<void> {
   await exec("CREATE INDEX IF NOT EXISTS idx_api_keys_customer ON api_keys(customer_email)");
   await exec("CREATE INDEX IF NOT EXISTS idx_api_keys_subscription ON api_keys(fluentcart_subscription_id)");
 
+  await migrateArticles();
+  await exec("CREATE INDEX IF NOT EXISTS idx_articles_dienst ON articles(dienst)");
   await seedAdminKey();
   await seedArticles();
 }

@@ -4,6 +4,7 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import { articlePublicJson, getApprovedArticle, listApprovedArticles, listRevisions } from "../lib/articles.js";
+import { neighborhood } from "../lib/graph.js";
 import { requireTier } from "../middleware/auth.js";
 import type { ApiKeyRow } from "../types.js";
 
@@ -70,6 +71,25 @@ function createServer(): McpServer {
             text: JSON.stringify({ count: compact.length, articles: compact }, null, 2),
           },
         ],
+      };
+    },
+  );
+
+  server.tool(
+    "get_related_articles",
+    "Geef gerichte buren van een artikel: wikilinks, tags, kolom en terugverwijzingen. Statische relaties, geen scores.",
+    { article_id: z.string().min(1).describe("Artikel-id of slug") },
+    async ({ article_id }) => {
+      const article = await getApprovedArticle(article_id);
+      if (!article) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ error: "not_found" }) }],
+          isError: true,
+        };
+      }
+      const articles = await listApprovedArticles();
+      return {
+        content: [{ type: "text", text: JSON.stringify(neighborhood(article, articles), null, 2) }],
       };
     },
   );

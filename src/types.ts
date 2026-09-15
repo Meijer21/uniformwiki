@@ -8,6 +8,7 @@ export interface ArticleRow {
   slug: string;
   title: string;
   category: string;
+  dienst: string;
   summary: string;
   body: string;
   metadata: string;
@@ -56,6 +57,10 @@ export interface ArticleMetadata {
   bronnen?: string;
   licentie?: string;
   trefwoorden?: string;
+  tags?: string;
+  dienst?: string;
+  diensten?: string;
+  ai?: string;
   [key: string]: string | undefined;
 }
 
@@ -68,6 +73,10 @@ export interface WikiWriteInput {
   articleId?: number;
   contributorName?: string;
   contributorNote?: string;
+  dienst?: string;
+  tags?: string;
+  bronnen?: string;
+  aiOrigin?: string;
 }
 
 declare module "fastify" {

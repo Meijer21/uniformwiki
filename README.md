@@ -1,18 +1,34 @@
 # UniformWiki
 
-Lichte kennisbank over uniformen en beroepskleding. Mensen lezen server-side HTML. AI-agents gebruiken dezelfde goedgekeurde teksten via REST en MCP. Gebouwd als één Fastify-proces voor Bunny Magic Containers.
+Kennisbank van THISLINE voor brandweer, ambulance, politie, defensie en handhaving. Mensen lezen de pagina’s. Agents halen dezelfde goedgekeurde tekst op via REST en MCP.
 
-Uitleg van het project, de keuzes en wat er gebouwd is: [PROJECT.md](PROJECT.md).  
-Cursor → GitHub → Bunny: [WORKFLOW.md](WORKFLOW.md).
+Live: [wiki.thisline.eu](https://wiki.thisline.eu)
+
+## Hoe je iets bijwerkt
+
+Je hoeft Bunny niet open te klikken.
+
+1. Zeg in Cursor wat er anders moet.
+2. De agent zet het op GitHub `main`.
+3. GitHub Actions bouwt de image en schuift de Magic Container door.
+4. Na een paar minuten staat het live. Secret `BUNNYNET_API_KEY` staat al.
+
+Dat is dezelfde flow als nu. Geen extra stappen, geen Shield-pakket van €10.
+
+Europa-toegang (alleen wiki-pullzone, niet thisline.eu): GitHub Actions → **Lock wiki to Europe**.
+
+Speelboek: [WORKFLOW.md](WORKFLOW.md).
 
 ## Wat je ermee doet
 
-- Artikelen zoeken en lezen zonder account
-- Verbeteringen insturen via `/bijdragen` — geen Git, geen editor
-- Modereren op `/beheer` met `ADMIN_API_KEY`
-- Licenties uit FluentCart omzetten in `uw_live_…`-sleutels voor MCP/API
+- Kolom kiezen, daarna thema, daarna artikel. Hoe dieper, hoe gerichter. Statische data, geen medailles.
+- Koppelingen zoals in Obsidian: `[[artikel]]`, tags, kolom. De graaf toont wat bij een thema hoort.
+- Leemtes: “hier ontbreekt nog iets, weet jij daar wat van.”
+- Elke pagina: bronvermelding plus of de tekst met AI is gemaakt.
+- THISLINE-blokken voor Pulse, Front Line Cards en het platform. Geen verkochte advertenties.
+- Bijdragen via `/bijdragen` zonder account. Beheer op `/beheer`.
 
-De publieke wiki blijft open voor Google. Programmatische toegang (API en MCP) vraagt een actieve sleutel.
+Lettertypes via Bunny Fonts. Geen Google. Geen tracking.
 
 ## Lokaal starten
 

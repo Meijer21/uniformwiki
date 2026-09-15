@@ -15,9 +15,9 @@ export function createAdminCookie(issuedAt = Date.now()): string {
   const secure = isProduction() || config.publicBaseUrl.startsWith("https://");
   const parts = [
     `${COOKIE}=${value}`,
-    "Path=/",
+    "Path=/beheer",
     "HttpOnly",
-    "SameSite=Lax",
+    "SameSite=Strict",
     `Max-Age=${MAX_AGE_SECONDS}`,
   ];
   if (secure) {
@@ -27,7 +27,7 @@ export function createAdminCookie(issuedAt = Date.now()): string {
 }
 
 export function clearAdminCookie(): string {
-  return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+  return `${COOKIE}=; Path=/beheer; HttpOnly; SameSite=Strict; Max-Age=0`;
 }
 
 export function parseCookies(header: string | string[] | undefined): Record<string, string> {

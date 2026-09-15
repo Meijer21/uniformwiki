@@ -29,10 +29,14 @@ Zonder dat secret bouwt Actions wél de image; de pod blijft op de oude tag tot 
 
 ## Elke wijziging (bestaande app)
 
+Je doet niks in Bunny. Cursor zet de commit op GitHub `main`. Actions bouwt en de pod schuift door. Klaar.
+
 1. Cursor: deze GitHub-repo open.
-2. Vraag de agent om de feature. Die commit en pusht naar `main`.
+2. Vraag de agent om de wijziging. Die commit en pusht naar `main`.
 3. Tab **Actions**: image + rolling update.
-4. Live op `https://mc-….bunny.run` (en je CNAME als die goed staat).
+4. Live op `https://wiki.thisline.eu`.
+
+Europa zonder Shield (alleen de wiki-zone, nooit thisline.eu): Actions → **Lock wiki to Europe**. Dat zet EU-edges aan en blokkeert landen buiten Europa op pull zone `6571141`. Geen Shield-pakket nodig.
 
 Lokaal hetzelfde, als de key in je shell staat:
 
@@ -78,7 +82,7 @@ Plak dit in een chat op de **nieuwe GitHub-repo**:
 
 - Publiek: **CDN**-endpoint, niet Anycast.
 - DNS: **plain CNAME** `wiki` → `mc-….bunny.run`. Zet DNS “CDN/Accelerate” **uit** — dat maakt een tweede pull zone en geeft **508 Loop Detected**.
-- Hostname alleen op de Magic Container-pull zone. Shield op **die** zone, niet geërfd van the hoofdsite.
+- Shield op **die** zone, niet geërfd van the hoofdsite. Voor deze wiki gebruiken we **geen** Shield-pakket: Traffic Manager (EU-edges + geblokkeerde landen) op pull zone `6571141` is genoeg.
 - Origin SSL uit, sticky uit, poort gelijk aan de containerpoort.
 
 ## Wat je niet doet

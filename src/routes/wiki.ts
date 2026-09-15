@@ -12,8 +12,14 @@ import {
   setRevisionDecision,
   writeArticle,
 } from "../lib/articles.js";
+import { findGaps } from "../lib/gaps.js";
+import { buildGraph, filterArticles, neighborhood } from "../lib/graph.js";
 import { listApiKeys } from "../lib/keys.js";
+import { articleDiensten, articleTags } from "../lib/links.js";
+import { parseStoredMetadata } from "../lib/metadata.js";
 import { clearAdminCookie, createAdminCookie, isAdminSession } from "../lib/session.js";
+import { slugify } from "../lib/slug.js";
+import { kolomById, KOLOMMEN } from "../lib/taxonomy.js";
 import { findActiveApiKey, requireAuth } from "../middleware/auth.js";
 import { dbAll } from "../db.js";
 import type { ArticleRow, RevisionRow } from "../types.js";
@@ -23,9 +29,14 @@ import {
   adminLoginPage,
   articlePage,
   contributePage,
+  dienstPage,
   errorPage,
+  gapsPage,
+  graphPage,
   homePage,
   notFoundPage,
+  privacyPage,
+  tagPage,
 } from "../views/templates.js";
 
 function html(reply: FastifyReply, status: number, body: string): FastifyReply {
@@ -59,7 +70,7 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
         listApprovedArticles(q || undefined, category || undefined),
       ]);
       const notice = query.geplaatst === "1" ? "Je bijdrage staat klaar voor keuring. Zodra die goedgekeurd is, komt hij live." : undefined;
-      return html(reply, 200, homePage(categories, articles, q, notice));
+      return html(reply, 200, homePage(categories, articles, q, notice, findGaps(articles)));
     } catch (error) {
       request.log.error({ err: error }, "Homepagina mislukt");
       return html(reply, 500, errorPage("Het overzicht kon niet worden geladen."));
@@ -73,8 +84,8 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
       if (!article) {
         return html(reply, 404, notFoundPage());
       }
-      const revisions = await listRevisions(article.id);
-      return html(reply, 200, articlePage(article, revisions));
+      const [revisions, articles] = await Promise.all([listRevisions(article.id), listApprovedArticles()]);
+      return html(reply, 200, articlePage(article, revisions, neighborhood(article, articles), articles));
     } catch (error) {
       request.log.error({ err: error }, "Artikelweergave mislukt");
       return html(reply, 500, errorPage("Dit artikel kon niet worden getoond."));
@@ -85,16 +96,22 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
     try {
       const query = request.query as Record<string, string>;
       const slug = (query.slug ?? "").trim();
+      const title = (query.title ?? "").trim();
       const existing = slug ? await getArticleByAny(slug) : undefined;
+      const meta = existing ? parseStoredMetadata(existing.metadata) : {};
       return html(
         reply,
         200,
         contributePage({
           slug,
-          title: existing?.title,
+          title: existing?.title || title,
           category: existing?.category,
+          dienst: existing ? articleDiensten(existing).join(", ") : "",
           summary: existing?.summary,
           body: existing ? existing.body : undefined,
+          tags: existing ? articleTags(existing).join(", ") : "",
+          bronnen: meta.bronnen,
+          aiOrigin: meta.ai,
           notice: query.ok === "1" ? "Bedankt. Je tekst wacht op keuring." : undefined,
         }),
       );
@@ -110,8 +127,17 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
       const title = readString(body, "title");
       const category = readString(body, "category");
       const articleBody = readString(body, "body");
+      const bronnen = readString(body, "bronnen");
+      const aiOrigin = readString(body, "ai_origin");
+      const dienst = readString(body, "dienst");
       if (!title || !category || !articleBody.trim()) {
-        return html(reply, 400, contributePage({ title, category, body: articleBody, error: "Titel, categorie en tekst zijn verplicht." }));
+        return html(reply, 400, contributePage({ title, category, body: articleBody, dienst, bronnen, aiOrigin, error: "Titel, categorie en tekst zijn verplicht." }));
+      }
+      if (!dienst || !bronnen.trim() || !aiOrigin) {
+        return html(reply, 400, contributePage({
+          title, category, body: articleBody, dienst, bronnen, aiOrigin,
+          error: "Kolom, bronnen en AI-herkomst zijn verplicht. Zo blijft elk stuk te herleiden.",
+        }));
       }
       await writeArticle(
         {
@@ -122,6 +148,10 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
           slug: readString(body, "slug") || undefined,
           contributorName: readString(body, "contributor_name"),
           contributorNote: readString(body, "contributor_note"),
+          dienst,
+          tags: readString(body, "tags"),
+          bronnen,
+          aiOrigin,
         },
         false,
       );
@@ -135,6 +165,62 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/toegang", async (_request, reply) => {
     return html(reply, 200, accessPage());
+  });
+
+  app.get("/privacy", async (_request, reply) => {
+    return html(reply, 200, privacyPage());
+  });
+
+  app.get("/graaf", async (request, reply) => {
+    try {
+      const articles = await listApprovedArticles();
+      const query = request.query as Record<string, string>;
+      return html(reply, 200, graphPage(buildGraph(articles), (query.focus ?? "").trim()));
+    } catch (error) {
+      request.log.error({ err: error }, "Graaf mislukt");
+      return html(reply, 500, errorPage("De graaf kon niet worden getekend."));
+    }
+  });
+
+  app.get("/graaf.json", async (_request, reply) => {
+    const articles = await listApprovedArticles();
+    return reply.send(buildGraph(articles));
+  });
+
+  app.get("/leemtes", async (request, reply) => {
+    try {
+      const articles = await listApprovedArticles();
+      return html(reply, 200, gapsPage(findGaps(articles)));
+    } catch (error) {
+      request.log.error({ err: error }, "Leemtes mislukt");
+      return html(reply, 500, errorPage("Leemtes konden niet worden geladen."));
+    }
+  });
+
+  app.get("/dienst/:id", async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const kolom = kolomById(id) || KOLOMMEN.find((item) => slugify(item.label) === slugify(id));
+      if (!kolom) {
+        return html(reply, 404, notFoundPage("Deze kolom kennen we niet."));
+      }
+      const articles = filterArticles(await listApprovedArticles(), { dienst: kolom.label });
+      return html(reply, 200, dienstPage(kolom.label, kolom.summary, articles, findGaps(articles, kolom.label), kolom.themes));
+    } catch (error) {
+      request.log.error({ err: error }, "Kolompagina mislukt");
+      return html(reply, 500, errorPage("Deze kolom kon niet worden getoond."));
+    }
+  });
+
+  app.get("/tag/:tag", async (request, reply) => {
+    try {
+      const { tag } = request.params as { tag: string };
+      const articles = filterArticles(await listApprovedArticles(), { tag });
+      return html(reply, 200, tagPage(tag.replace(/-/g, " "), articles));
+    } catch (error) {
+      request.log.error({ err: error }, "Tagpagina mislukt");
+      return html(reply, 500, errorPage("Deze tag kon niet worden getoond."));
+    }
   });
 
   app.get("/beheer", async (request, reply) => {
@@ -206,6 +292,10 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
           slug: readString(request.body, "slug") || undefined,
           contributorName: "beheerder",
           contributorNote: "Direct gepubliceerd vanuit beheer",
+          dienst: readString(request.body, "dienst"),
+          tags: readString(request.body, "tags"),
+          bronnen: readString(request.body, "bronnen"),
+          aiOrigin: readString(request.body, "ai_origin"),
         },
         true,
       );
@@ -238,7 +328,7 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
   app.get("/robots.txt", async (_request, reply) => {
     return reply
       .header("content-type", "text/plain; charset=utf-8")
-      .send(`User-agent: *\nAllow: /\nDisallow: /beheer\nSitemap: ${config.publicBaseUrl}/sitemap.xml\n`);
+      .send(`User-agent: *\nAllow: /\nDisallow: /beheer\nDisallow: /api\nDisallow: /webhooks\nSitemap: ${config.publicBaseUrl}/sitemap.xml\n`);
   });
 
   app.get("/sitemap.xml", async (request, reply) => {
@@ -248,6 +338,10 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
         "/",
         "/bijdragen",
         "/toegang",
+        "/privacy",
+        "/graaf",
+        "/leemtes",
+        ...KOLOMMEN.map((kolom) => `/dienst/${kolom.id}`),
         ...articles.map((article) => `/wiki/${encodeURIComponent(article.slug)}`),
       ];
       const body = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls
@@ -316,6 +410,10 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
           articleId: typeof body.article_id === "number" ? body.article_id : undefined,
           contributorName: typeof body.contributor_name === "string" ? body.contributor_name : key.label || key.tier,
           contributorNote: typeof body.contributor_note === "string" ? body.contributor_note : "",
+          dienst: typeof body.dienst === "string" ? body.dienst : "",
+          tags: typeof body.tags === "string" ? body.tags : "",
+          bronnen: typeof body.bronnen === "string" ? body.bronnen : "",
+          aiOrigin: typeof body.ai === "string" ? body.ai : typeof body.ai_origin === "string" ? body.ai_origin : "",
         },
         asApproved,
       );

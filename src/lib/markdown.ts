@@ -1,3 +1,6 @@
+import { slugify } from "./slug.js";
+import type { LinkResolver } from "./links.js";
+
 export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -7,19 +10,48 @@ export function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function formatInline(text: string): string {
-  const escaped = escapeHtml(text);
+function formatBits(escaped: string): string {
   return escaped
-    .replace(/`([^`]+)`/g, '<code class="rounded bg-stone-200/80 px-1 py-0.5 text-[0.9em]">$1</code>')
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
     .replace(
       /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
-      '<a class="underline decoration-amber-700/50 underline-offset-2 hover:text-amber-900" href="$2" rel="noopener noreferrer">$1</a>',
+      '<a href="$2" rel="noopener noreferrer">$1</a>',
     );
 }
 
-export function renderMarkdown(source: string): string {
+function formatInline(text: string, resolveLink?: LinkResolver): string {
+  const parts = text.split(/(\[\[[^\]]+\]\])/g);
+  return parts
+    .map((part) => {
+      const wiki = part.match(/^\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]$/);
+      if (wiki) {
+        const target = wiki[1].trim();
+        const label = (wiki[2] ?? target).trim();
+        const hit = resolveLink?.(target);
+        if (hit) {
+          return `<a class="wikilink" href="/wiki/${encodeURIComponent(hit.slug)}">${escapeHtml(label)}</a>`;
+        }
+        return `<a class="wikilink is-missing" href="/bijdragen?slug=${encodeURIComponent(slugify(target))}&title=${encodeURIComponent(target)}">${escapeHtml(label)}</a>`;
+      }
+      const withTags = part.replace(
+        /(^|[\s(])#([A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9/_-]{1,39})/g,
+        (_all, prefix: string, tag: string) =>
+          `${prefix}<a class="tag-inline" href="/tag/${encodeURIComponent(slugify(tag))}">#${escapeHtml(tag)}</a>`,
+      );
+      if (withTags !== part) {
+        const chunks = withTags.split(/(<a class="tag-inline"[\s\S]*?<\/a>)/g);
+        return chunks
+          .map((chunk) => (chunk.startsWith("<a class=\"tag-inline\"") ? chunk : formatBits(escapeHtml(chunk))))
+          .join("");
+      }
+      return formatBits(escapeHtml(part));
+    })
+    .join("");
+}
+
+export function renderMarkdown(source: string, resolveLink?: LinkResolver): string {
   const lines = source.replace(/\r\n/g, "\n").split("\n");
   const html: string[] = [];
   let inCode = false;
@@ -32,9 +64,9 @@ export function renderMarkdown(source: string): string {
       return;
     }
     const tag = listType;
-    html.push(`<${tag} class="my-4 ml-5 list-outside ${tag === "ol" ? "list-decimal" : "list-disc"} space-y-1">`);
+    html.push(`<${tag}>`);
     for (const item of list) {
-      html.push(`<li>${formatInline(item)}</li>`);
+      html.push(`<li>${formatInline(item, resolveLink)}</li>`);
     }
     html.push(`</${tag}>`);
     list = [];
@@ -45,9 +77,7 @@ export function renderMarkdown(source: string): string {
     if (!inCode) {
       return;
     }
-    html.push(
-      `<pre class="my-5 overflow-x-auto rounded-lg bg-stone-900 p-4 text-sm leading-relaxed text-stone-100"><code>${escapeHtml(code.join("\n"))}</code></pre>`,
-    );
+    html.push(`<pre><code>${escapeHtml(code.join("\n"))}</code></pre>`);
     code = [];
     inCode = false;
   };
@@ -63,26 +93,17 @@ export function renderMarkdown(source: string): string {
       }
       continue;
     }
-
     if (inCode) {
       code.push(line);
       continue;
     }
-
     const heading = line.match(/^(#{1,3})\s+(.+)$/);
     if (heading) {
       flushList();
       const level = heading[1].length;
-      const cls =
-        level === 1
-          ? "mt-8 mb-3 font-serif text-3xl"
-          : level === 2
-            ? "mt-7 mb-2 font-serif text-2xl"
-            : "mt-6 mb-2 font-serif text-xl";
-      html.push(`<h${level} class="${cls}">${formatInline(heading[2])}</h${level}>`);
+      html.push(`<h${level}>${formatInline(heading[2], resolveLink)}</h${level}>`);
       continue;
     }
-
     const ul = line.match(/^[-*]\s+(.+)$/);
     if (ul) {
       if (listType !== "ul") {
@@ -92,7 +113,6 @@ export function renderMarkdown(source: string): string {
       list.push(ul[1]);
       continue;
     }
-
     const ol = line.match(/^\d+\.\s+(.+)$/);
     if (ol) {
       if (listType !== "ol") {
@@ -102,16 +122,13 @@ export function renderMarkdown(source: string): string {
       list.push(ol[1]);
       continue;
     }
-
     if (!line.trim()) {
       flushList();
       continue;
     }
-
     flushList();
-    html.push(`<p class="my-3 leading-7">${formatInline(line)}</p>`);
+    html.push(`<p>${formatInline(line, resolveLink)}</p>`);
   }
-
   flushCode();
   flushList();
   return html.join("\n");

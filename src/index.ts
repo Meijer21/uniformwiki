@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import formbody from "@fastify/formbody";
 import { config } from "./config.js";
 import { closeDb, initDb } from "./db.js";
+import { registerHttpGuards } from "./middleware/http.js";
 import { registerMcpRoutes } from "./routes/mcp.js";
 import { registerWebhookRoutes } from "./routes/webhooks.js";
 import { registerWikiRoutes } from "./routes/wiki.js";
@@ -27,6 +28,7 @@ app.addContentTypeParser("application/json", { parseAs: "string" }, (request, bo
 });
 
 await app.register(formbody);
+registerHttpGuards(app);
 
 app.setErrorHandler((error, request, reply) => {
   request.log.error({ err: error }, "Onverwachte fout");
