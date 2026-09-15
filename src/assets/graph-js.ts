@@ -1,7 +1,7 @@
 export const GRAPH_JS = `(function () {
   var dataEl = document.getElementById("graph-data");
-  var canvas = document.getElementById("graaf");
-  var empty = document.getElementById("graaf-leeg");
+  var canvas = document.getElementById("kennisweb") || document.getElementById("graaf");
+  var empty = document.getElementById("kennisweb-leeg") || document.getElementById("graaf-leeg");
   if (!dataEl || !canvas || !canvas.getContext) return;
   var data = JSON.parse(dataEl.textContent || '{"nodes":[],"edges":[]}');
   var nodes = data.nodes || [];

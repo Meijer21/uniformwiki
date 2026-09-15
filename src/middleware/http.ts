@@ -1,10 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { CONTRIBUTE_JS } from "../assets/contribute-js.js";
 import { GRAPH_JS } from "../assets/graph-js.js";
 import { THISLINE_CSS } from "../assets/thisline-css.js";
+import { isIndexingBot } from "../lib/crawlers.js";
 import { isProduction } from "../config.js";
 import { isEuropeanCountry, requestCountryCode } from "../lib/europe.js";
 
-const SKIP_GEO = new Set(["/healthz"]);
+const SKIP_GEO = new Set(["/healthz", "/robots.txt", "/sitemap.xml", "/llms.txt", "/feed.xml", "/openapi.json"]);
 
 function clientIp(request: FastifyRequest): string {
   const forwarded = request.headers["x-forwarded-for"];
@@ -51,6 +53,13 @@ export function registerHttpGuards(app: FastifyInstance): void {
       .send(GRAPH_JS);
   });
 
+  app.get("/assets/contribute.js", async (_request, reply) => {
+    return reply
+      .header("content-type", "application/javascript; charset=utf-8")
+      .header("cache-control", "public, max-age=86400, stale-while-revalidate=604800")
+      .send(CONTRIBUTE_JS);
+  });
+
   app.addHook("onRequest", async (request, reply) => {
     const path = request.url.split("?")[0];
 
@@ -78,7 +87,7 @@ export function registerHttpGuards(app: FastifyInstance): void {
       ].join("; "),
     );
 
-    if (!SKIP_GEO.has(path) && !path.startsWith("/assets/")) {
+    if (!SKIP_GEO.has(path) && !path.startsWith("/assets/") && !isIndexingBot(request.headers["user-agent"])) {
       const country = requestCountryCode(request.headers as Record<string, unknown>);
       if (country && country !== "XX" && !isEuropeanCountry(country)) {
         return reply

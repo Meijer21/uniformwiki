@@ -2,6 +2,17 @@ export type ArticleStatus = "pending" | "approved" | "rejected" | "archived";
 export type RevisionStatus = "pending" | "approved" | "rejected";
 export type ApiKeyTier = "public_read" | "mcp" | "admin";
 export type ApiKeyStatus = "active" | "suspended" | "revoked";
+export type VocabKind = "tag" | "category" | "dienst";
+export type VocabStatus = "pending" | "approved" | "rejected";
+
+export interface VocabRow {
+  id: number;
+  kind: VocabKind;
+  label: string;
+  slug: string;
+  status: VocabStatus;
+  created_at: string;
+}
 
 export interface ArticleRow {
   id: number;

@@ -10,43 +10,31 @@ export function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function formatBits(escaped: string): string {
-  return escaped
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
-    .replace(
-      /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
-      '<a href="$2" rel="noopener noreferrer">$1</a>',
-    );
+function wikiAnchor(target: string, label: string, resolveLink?: LinkResolver): string {
+  const hit = resolveLink?.(target);
+  if (hit) {
+    return `<a class="wikilink" href="/wiki/${encodeURIComponent(hit.slug)}">${escapeHtml(label)}</a>`;
+  }
+  return `<a class="wikilink is-missing" href="/bijdragen?slug=${encodeURIComponent(slugify(target))}&title=${encodeURIComponent(target)}&vast=1">${escapeHtml(label)}</a>`;
 }
 
 function formatInline(text: string, resolveLink?: LinkResolver): string {
-  const parts = text.split(/(\[\[[^\]]+\]\])/g);
+  const parts = text.split(/(\[\[[^\]]+\]\]|@\[[^\]]+\]|@[A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9_-]{1,79})/g);
   return parts
     .map((part) => {
       const wiki = part.match(/^\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]$/);
       if (wiki) {
-        const target = wiki[1].trim();
-        const label = (wiki[2] ?? target).trim();
-        const hit = resolveLink?.(target);
-        if (hit) {
-          return `<a class="wikilink" href="/wiki/${encodeURIComponent(hit.slug)}">${escapeHtml(label)}</a>`;
-        }
-        return `<a class="wikilink is-missing" href="/bijdragen?slug=${encodeURIComponent(slugify(target))}&title=${encodeURIComponent(target)}">${escapeHtml(label)}</a>`;
+        return wikiAnchor(wiki[1].trim(), (wiki[2] ?? wiki[1]).trim(), resolveLink);
       }
-      const withTags = part.replace(
-        /(^|[\s(])#([A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9/_-]{1,39})/g,
-        (_all, prefix: string, tag: string) =>
-          `${prefix}<a class="tag-inline" href="/tag/${encodeURIComponent(slugify(tag))}">#${escapeHtml(tag)}</a>`,
-      );
-      if (withTags !== part) {
-        const chunks = withTags.split(/(<a class="tag-inline"[\s\S]*?<\/a>)/g);
-        return chunks
-          .map((chunk) => (chunk.startsWith("<a class=\"tag-inline\"") ? chunk : formatBits(escapeHtml(chunk))))
-          .join("");
+      const atBracket = part.match(/^@\[([^\]]+)\]$/);
+      if (atBracket) {
+        return wikiAnchor(atBracket[1].trim(), atBracket[1].trim(), resolveLink);
       }
-      return formatBits(escapeHtml(part));
+      const atToken = part.match(/^@([A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9_-]{1,79})$/);
+      if (atToken) {
+        return wikiAnchor(atToken[1], atToken[1].replace(/-/g, " "), resolveLink);
+      }
+      return escapeHtml(part);
     })
     .join("");
 }
@@ -54,8 +42,6 @@ function formatInline(text: string, resolveLink?: LinkResolver): string {
 export function renderMarkdown(source: string, resolveLink?: LinkResolver): string {
   const lines = source.replace(/\r\n/g, "\n").split("\n");
   const html: string[] = [];
-  let inCode = false;
-  let code: string[] = [];
   let list: string[] = [];
   let listType: "ul" | "ol" | null = null;
 
@@ -73,35 +59,14 @@ export function renderMarkdown(source: string, resolveLink?: LinkResolver): stri
     listType = null;
   };
 
-  const flushCode = (): void => {
-    if (!inCode) {
-      return;
-    }
-    html.push(`<pre><code>${escapeHtml(code.join("\n"))}</code></pre>`);
-    code = [];
-    inCode = false;
-  };
-
   for (const line of lines) {
     if (line.startsWith("```")) {
-      if (inCode) {
-        flushCode();
-      } else {
-        flushList();
-        inCode = true;
-        code = [];
-      }
-      continue;
-    }
-    if (inCode) {
-      code.push(line);
       continue;
     }
     const heading = line.match(/^(#{1,3})\s+(.+)$/);
     if (heading) {
       flushList();
-      const level = heading[1].length;
-      html.push(`<h${level}>${formatInline(heading[2], resolveLink)}</h${level}>`);
+      html.push(`<p><strong>${formatInline(heading[2], resolveLink)}</strong></p>`);
       continue;
     }
     const ul = line.match(/^[-*]\s+(.+)$/);
@@ -129,7 +94,6 @@ export function renderMarkdown(source: string, resolveLink?: LinkResolver): stri
     flushList();
     html.push(`<p>${formatInline(line, resolveLink)}</p>`);
   }
-  flushCode();
   flushList();
   return html.join("\n");
 }

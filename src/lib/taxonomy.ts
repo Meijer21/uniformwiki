@@ -30,7 +30,7 @@ export const KOLOMMEN: Kolom[] = [
   {
     id: "ambulance",
     label: "Ambulance",
-    summary: "Herenkenning, hygiëne, hoge zichtbaarheid en kleding tijdens de rit.",
+    summary: "Herkenning, hygiëne, hoge zichtbaarheid en kleding tijdens de rit.",
     themes: [
       { slug: "ambulance-herkenning", title: "Herkenning ambulance", summary: "Waarom de burger je in één oogopslag moet zien." },
       { slug: "hygiene-kleding", title: "Hygiëne en kleding", summary: "Wassen, wisselen en wat niet mee naar huis mag." },

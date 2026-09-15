@@ -17,7 +17,7 @@ export const SEED_ARTICLES: Array<{
 
 Je zoekt op [[kolom]], daarna op thema, daarna op het artikel. Hoe gerichter je klikt, hoe smaller de set. Dat is geen spel en geen medaille. Het is statische indeling.
 
-Zie [[Hoe je bijdraagt]], [[Wat is een uniform?]] en de [[Kennisgraaf]]. Ontbreekt er iets, dan vraagt de wiki dat hardop.`,
+Zie [[Hoe je bijdraagt]], [[Wat is een uniform?]] en [[Samenhang]]. Ontbreekt er iets, dan vraagt de wiki dat hardop.`,
     metadata: {
       licentie: "CC-BY-SA-4.0",
       trefwoorden: "uniformwiki, thisline, wiki",
@@ -190,18 +190,18 @@ Rijksoverheid. (z.d.). Ambulancezorg. https://www.rijksoverheid.nl`,
   },
   {
     slug: "kennisgraaf",
-    title: "Kennisgraaf",
+    title: "Samenhang",
     category: "Over",
     dienst: "",
-    summary: "Artikelen, tags, kolommen en verwijzingen in één beeld. Zoals een netwerk, geen speeltuin.",
-    body: `De graaf toont hoe pagina’s aan elkaar zitten: [[kolom]], tag, categorie en [[wikilink]]. Klik je dieper, dan blijft alleen wat bij dat thema hoort.
+    summary: "Artikelen, tags, kolommen en verwijzingen in één beeld. Wat bij elkaar hoort, staat bij elkaar.",
+    body: `Samenhang toont hoe pagina’s aan elkaar zitten: [[kolom]], tag, categorie en [[wikilink]]. Klik je dieper, dan blijft alleen wat bij dat thema hoort.
 
-Lege plekken zijn geen falen. Ze zijn het verzoek: weet jij daar wat van. Open [[Hoe je bijdraagt]] en schrijf het op, met bron.`,
+Lege plekken zijn geen falen. Ze zijn het verzoek: weet jij daar wat van. Open [[Hoe je bijdraagt]] en vul het aan, met bron.`,
     metadata: {
       licentie: "CC-BY-SA-4.0",
-      trefwoorden: "graaf, wikilink, tag",
+      trefwoorden: "samenhang, wikilink, tag",
       ai: "mens",
-      bronnen: `THISLINE. (2026). UniformWiki. https://wiki.thisline.eu/graaf`,
+      bronnen: `THISLINE. (2026). UniformWiki. https://wiki.thisline.eu/samenhang`,
     },
   },
 ];

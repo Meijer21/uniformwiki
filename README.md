@@ -22,11 +22,13 @@ Speelboek: [WORKFLOW.md](WORKFLOW.md).
 ## Wat je ermee doet
 
 - Kolom kiezen, daarna thema, daarna artikel. Hoe dieper, hoe gerichter. Statische data, geen medailles.
-- Koppelingen zoals in Obsidian: `[[artikel]]`, tags, kolom. De graaf toont wat bij een thema hoort.
-- Leemtes: “hier ontbreekt nog iets, weet jij daar wat van.”
-- Elke pagina: bronvermelding plus of de tekst met AI is gemaakt.
+- KennisWeb toont wat bij een thema hoort. Onder elk artikel kun je zelf koppelen.
+- Aanvullen: wat nog ontbreekt. Aanpassen: bestaande stukken verbeteren.
+- Elke pagina: bron met naam en klikbare link, plus of de tekst met AI is gemaakt.
 - THISLINE-blokken voor Pulse, Front Line Cards en het platform. Geen verkochte advertenties.
 - Bijdragen via `/bijdragen` zonder account. Beheer op `/beheer`.
+
+Vindbaarheid: [sitemap.xml](https://wiki.thisline.eu/sitemap.xml), [llms.txt](https://wiki.thisline.eu/llms.txt), [feed.xml](https://wiki.thisline.eu/feed.xml). Elk artikel heeft ook een Markdown-variant (`/wiki/slug.md`).
 
 Lettertypes via Bunny Fonts. Geen Google. Geen tracking.
 
@@ -116,14 +118,15 @@ De volledige sleutel staat onder Beheer. Stuur die naar de klant tot je later ma
 
 - Streamable HTTP: `POST /api/v1/mcp`
 - Legacy SSE: `GET /api/v1/mcp` en `POST /api/v1/mcp/messages`
-- Header: `Authorization: Bearer uw_live_…` (tier `mcp` of `admin`)
+- Header: `Authorization: Bearer …` (`mcp` = licentie, `admin` = beheer)
 
-Tools:
+Licentie (`mcp`): lezen en verzoeken indienen (`submit_uniform_change`). Alles blijft pending tot keuring.
 
-- `get_uniform_article` — `article_id` (id of slug)
-- `search_uniform_articles` — `query`, optioneel `category`
+Beheer (`admin`, jouw `ADMIN_API_KEY`): ook `publish_uniform_article`, `list_pending_changes` en `review_pending_change`.
 
-REST voor agents: `GET/POST /api/wiki` met dezelfde Bearer-header. `public_read` en `mcp` schrijven naar `pending`. `admin` publiceert direct.
+Verdere tools: `get_uniform_article`, `search_uniform_articles`, `get_related_articles`, `list_open_topics`.
+
+REST: `GET/POST /api/wiki` met dezelfde Bearer-header. `mcp` schrijft naar `pending`. `admin` publiceert met `"publish": true`.
 
 ## Bijdragen zonder gedoe
 

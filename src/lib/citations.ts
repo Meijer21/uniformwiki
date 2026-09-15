@@ -1,7 +1,8 @@
 export type AiOrigin = "mens" | "ai-ondersteund" | "ai-gegenereerd";
 
 export interface Citation {
-  text: string;
+  name: string;
+  url?: string;
 }
 
 export interface SourceBlock {
@@ -38,36 +39,82 @@ export function aiLabel(origin: AiOrigin | ""): string {
   return AI_LABEL[origin];
 }
 
-/** Eén bron per regel. Lijkt het al op een bronvermelding, dan laten we hem staan. */
+export function isSafeHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export function parseCitations(raw: string | undefined): Citation[] {
   if (!raw?.trim()) {
     return [];
   }
-  return raw
-    .split(/\r?\n|;/)
-    .map((line) => formatCitation(line.trim()))
-    .filter((line) => line.length > 0)
-    .map((text) => ({ text }));
+  const out: Citation[] = [];
+  const seen = new Set<string>();
+  for (const line of raw.split(/\r?\n|;/)) {
+    const parsed = parseCitationLine(line);
+    if (!parsed) {
+      continue;
+    }
+    const key = `${parsed.name.toLowerCase()}|${parsed.url ?? ""}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    out.push(parsed);
+  }
+  return out;
 }
 
-export function formatCitation(line: string): string {
-  if (!line) {
-    return "";
-  }
+function parseCitationLine(line: string): Citation | undefined {
   let text = line.replace(/^[-*]\s+/, "").trim();
+  if (!text) {
+    return undefined;
+  }
+  const pipe = text.match(/^(.+?)\s+\|\s+(https?:\/\/\S+)$/i);
+  if (pipe) {
+    const url = pipe[2].replace(/[.,);]+$/, "");
+    return { name: pipe[1].trim(), url: isSafeHttpUrl(url) ? url : undefined };
+  }
   const urlMatch = text.match(/https?:\/\/[^\s)]+/i);
-  const hasYear = /\((1[7-9]\d{2}|20\d{2})\)/.test(text) || /\b(1[7-9]\d{2}|20\d{2})\b/.test(text);
-  if (urlMatch && !hasYear) {
-    const url = urlMatch[0];
-    const rest = text.replace(url, "").replace(/\s+/g, " ").trim().replace(/[.,;]+$/, "");
-    text = rest
-      ? `${rest}. Geraadpleegd via ${url}`
-      : `Geraadpleegd via ${url}`;
+  if (urlMatch) {
+    const url = urlMatch[0].replace(/[.,);]+$/, "");
+    const name = text.replace(urlMatch[0], "").replace(/\s+/g, " ").trim().replace(/[.,;]+$/, "");
+    return {
+      name: name || url,
+      url: isSafeHttpUrl(url) ? url : undefined,
+    };
   }
-  if (!/[.!?]$/.test(text)) {
-    text += ".";
+  return { name: text.replace(/[.,;]+$/, "") };
+}
+
+export function serializeCitations(items: Citation[]): string {
+  return items
+    .map((item) => {
+      const name = item.name.trim();
+      const url = item.url?.trim() ?? "";
+      if (!name && !url) {
+        return "";
+      }
+      if (name && url && isSafeHttpUrl(url)) {
+        return `${name} | ${url}`;
+      }
+      return name || url;
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+export function citationsFromFields(names: string[], urls: string[]): string {
+  const count = Math.max(names.length, urls.length);
+  const items: Citation[] = [];
+  for (let i = 0; i < count; i += 1) {
+    items.push({ name: (names[i] ?? "").trim(), url: (urls[i] ?? "").trim() });
   }
-  return text;
+  return serializeCitations(items);
 }
 
 export function sourceBlock(bronnen: string | undefined, ai: string | undefined): SourceBlock {

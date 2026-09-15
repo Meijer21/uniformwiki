@@ -1,5 +1,6 @@
 import { dbAll, dbGet, dbRun } from "../db.js";
 import { sanitizeRecord } from "../middleware/sanitizer.js";
+import { sanitizeWikiBody } from "./safe-text.js";
 import type {
   ArticleRow,
   ArticleStatus,
@@ -7,9 +8,10 @@ import type {
   RevisionRow,
   WikiWriteInput,
 } from "../types.js";
-import { articleDiensten, articleTags, mergeTagLists } from "./links.js";
+import { articleDiensten, articleTags, mergeTagLists, splitList } from "./links.js";
 import { metadataToJson, parseMetadataBlock, parseStoredMetadata } from "./metadata.js";
 import { slugify, uniqueSlug } from "./slug.js";
+import { approveTermsFromText, proposeUnknownTerms } from "./vocab.js";
 
 export interface WriteResult {
   article: ArticleRow;
@@ -24,7 +26,7 @@ function sanitizeInput(input: WikiWriteInput): WikiWriteInput {
       title: input.title.trim(),
       category: input.category.trim(),
       summary: input.summary.trim(),
-      body: input.body,
+      body: sanitizeWikiBody(input.body),
       slug: input.slug?.trim(),
       dienst: (input.dienst ?? "").trim(),
       tags: (input.tags ?? "").trim(),
@@ -206,6 +208,12 @@ export async function writeArticle(input: WikiWriteInput, asApproved: boolean): 
   if (!revision || !updated) {
     throw new Error("Revisie kon niet worden opgeslagen.");
   }
+  const tags = splitList(metadataObj.trefwoorden);
+  if (asApproved) {
+    await approveTermsFromText(clean.category, dienst, tags);
+  } else {
+    await proposeUnknownTerms(clean.category, tags);
+  }
   return { article: updated, revision, created };
 }
 
@@ -221,6 +229,7 @@ export async function setRevisionDecision(revisionId: number, decision: "approve
   await dbRun("UPDATE article_revisions SET status = ? WHERE id = ?", [decision, revisionId]);
 
   if (decision === "approved") {
+    const meta = parseStoredMetadata(revision.metadata);
     await dbRun(
       `UPDATE articles
        SET title = ?, category = ?, dienst = ?, summary = ?, body = ?, metadata = ?,
@@ -229,7 +238,7 @@ export async function setRevisionDecision(revisionId: number, decision: "approve
       [
         revision.title,
         revision.category,
-        parseStoredMetadata(revision.metadata).dienst ?? "",
+        meta.dienst ?? "",
         revision.summary,
         revision.body,
         revision.metadata,
@@ -237,6 +246,7 @@ export async function setRevisionDecision(revisionId: number, decision: "approve
         revision.article_id,
       ],
     );
+    await approveTermsFromText(revision.category, meta.dienst ?? "", splitList(meta.trefwoorden));
     return;
   }
 

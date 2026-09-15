@@ -13,6 +13,8 @@ export const DIENSTEN = [
 ] as const;
 
 const WIKILINK_RE = /\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]/g;
+const AT_BRACKET_RE = /@\[([^\]]+)\]/g;
+const AT_TOKEN_RE = /(^|[\s(])@([A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9_-]{1,79})/g;
 const HASHTAG_RE = /(^|[\s(])#([A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9/_-]{1,39})/g;
 
 export interface WikiLink {
@@ -51,19 +53,31 @@ export function splitList(value: string | undefined): string[] {
 export function parseWikiLinks(body: string): WikiLink[] {
   const out: WikiLink[] = [];
   const seen = new Set<string>();
+  const add = (target: string, label: string): void => {
+    const trimmed = target.trim();
+    if (!trimmed) {
+      return;
+    }
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    out.push({ target: trimmed, label: label.trim() || trimmed });
+  };
+
   WIKILINK_RE.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = WIKILINK_RE.exec(body))) {
-    const target = match[1].trim();
-    if (!target) {
-      continue;
-    }
-    const key = target.toLowerCase();
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    out.push({ target, label: (match[2] ?? target).trim() });
+    add(match[1], match[2] ?? match[1]);
+  }
+  AT_BRACKET_RE.lastIndex = 0;
+  while ((match = AT_BRACKET_RE.exec(body))) {
+    add(match[1], match[1]);
+  }
+  AT_TOKEN_RE.lastIndex = 0;
+  while ((match = AT_TOKEN_RE.exec(body))) {
+    add(match[2], match[2]);
   }
   return out;
 }

@@ -6,6 +6,7 @@ import { keyPrefix } from "./lib/crypto.js";
 import { mergeTagLists } from "./lib/links.js";
 import { metadataToJson, parseStoredMetadata } from "./lib/metadata.js";
 import { SEED_ARTICLES } from "./lib/seed.js";
+import { seedVocab } from "./lib/vocab.js";
 import type { ApiKeyRow, ArticleRow, RevisionRow } from "./types.js";
 
 let db: sqlite3.Database | null = null;
@@ -248,6 +249,8 @@ export async function initDb(): Promise<void> {
   await exec("CREATE INDEX IF NOT EXISTS idx_articles_dienst ON articles(dienst)");
   await seedAdminKey();
   await seedArticles();
+  const allArticles = await dbAll<ArticleRow>("SELECT * FROM articles");
+  await seedVocab(allArticles);
 }
 
 export async function closeDb(): Promise<void> {

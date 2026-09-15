@@ -1,13 +1,14 @@
 import { config } from "../config.js";
-import { aiLabel, sourceBlock } from "../lib/citations.js";
+import { aiLabel, parseCitations, sourceBlock, type Citation } from "../lib/citations.js";
 import { findGaps } from "../lib/gaps.js";
-import type { ArticleNeighborhood, RelatedArticle } from "../lib/graph.js";
+import type { ArticleNeighborhood, GraphPayload, RelatedArticle } from "../lib/graph.js";
 import { buildLinkResolver } from "../lib/links.js";
 import { escapeHtml, renderMarkdown } from "../lib/markdown.js";
 import { parseStoredMetadata } from "../lib/metadata.js";
 import { promosFor, type Promo, type PromoPlacement } from "../lib/promos.js";
+import { articleJsonLd, organizationJsonLd } from "../lib/seo.js";
 import { KOLOMMEN } from "../lib/taxonomy.js";
-import type { ApiKeyRow, ArticleRow, CategoryCount, RevisionRow } from "../types.js";
+import type { ApiKeyRow, ArticleRow, CategoryCount, RevisionRow, VocabRow } from "../types.js";
 
 export interface PageOptions {
   title: string;
@@ -16,6 +17,33 @@ export interface PageOptions {
   jsonLd?: Record<string, unknown>;
   scripts?: string[];
   jsonBlock?: { id: string; json: string };
+  markdownUrl?: string;
+}
+
+export interface ContributeValues {
+  title?: string;
+  slug?: string;
+  category?: string;
+  dienst?: string;
+  summary?: string;
+  body?: string;
+  tags?: string;
+  bronnen?: string;
+  aiOrigin?: string;
+  name?: string;
+  note?: string;
+  notice?: string;
+  error?: string;
+  locked?: boolean;
+  categoryNew?: string;
+  modus?: "aanpassen" | "aanvullen" | "nieuw";
+}
+
+export interface ContributeOptions {
+  categories: string[];
+  tags: string[];
+  diensten: string[];
+  mentions: Array<{ kind: string; label: string; insert: string }>;
 }
 
 function absoluteUrl(path: string): string {
@@ -23,7 +51,15 @@ function absoluteUrl(path: string): string {
 }
 
 function navLink(href: string, label: string, current: string): string {
-  const active = current === href || (href !== "/" && current.startsWith(href));
+  const aliases: Record<string, string[]> = {
+    "/kennisweb": ["/graaf", "/samenhang"],
+    "/aanvullen": ["/leemtes"],
+  };
+  const extra = aliases[href] ?? [];
+  const active =
+    current === href ||
+    extra.includes(current) ||
+    (href !== "/" && (current.startsWith(href) || extra.some((item) => current.startsWith(item))));
   return `<a href="${href}" class="${active ? "is-active" : ""}">${label}</a>`;
 }
 
@@ -37,24 +73,31 @@ function promoCard(promo: Promo): string {
 }
 
 function promoRow(placement: PromoPlacement, dienst?: string): string {
-  const items = promosFor(placement, dienst);
-  if (!items.length) {
+  const promo = promosFor(placement, dienst)[0];
+  if (!promo) {
     return "";
   }
-  return `<div class="promo-row">${items.map(promoCard).join("")}</div>`;
+  return `<div class="promo-row">${promoCard(promo)}</div>`;
 }
 
 function sponsorLine(): string {
-  return `<p class="sponsor">Gehost en gesponsord door <strong>THISLINE</strong>. Voor wie naar voren stapt. Pulse, Front Line Cards en het platform zijn van THISLINE, geen verkochte advertenties.</p>`;
+  return `<p class="sponsor">Gehost door <strong>THISLINE</strong>. Voor wie naar voren stapt.</p>`;
 }
 
 function gapCard(title: string, summary: string, slug: string): string {
   return `<div class="gap">
-    <p class="eyebrow">Hier ontbreekt nog iets</p>
+    <p class="eyebrow">Nog open</p>
     <h2 class="h3">${escapeHtml(title)}</h2>
-    <p>${escapeHtml(summary)} Weet jij daar wat van. Wil je dat toevoegen.</p>
-    <a class="btn btn-secondary" href="/bijdragen?slug=${encodeURIComponent(slug)}&title=${encodeURIComponent(title)}">Schrijf dit op</a>
+    <p>${escapeHtml(summary)} Ken je dit. Vul het aan.</p>
+    <a class="btn btn-secondary" href="/bijdragen?slug=${encodeURIComponent(slug)}&title=${encodeURIComponent(title)}&vast=1">Aanvullen</a>
   </div>`;
+}
+
+function citationItem(item: Citation): string {
+  if (item.url) {
+    return `<li><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.name)}</a></li>`;
+  }
+  return `<li>${escapeHtml(item.name)}</li>`;
 }
 
 export function layout(options: PageOptions, content: string): string {
@@ -82,7 +125,12 @@ export function layout(options: PageOptions, content: string): string {
     <meta property="og:title" content="${escapeHtml(pageTitle)}" />
     <meta property="og:description" content="${escapeHtml(options.description)}" />
     <meta property="og:url" content="${escapeHtml(absoluteUrl(options.path))}" />
-    <meta name="robots" content="${noindex ? "noindex,nofollow" : "index,follow"}" />
+    <meta name="robots" content="${noindex ? "noindex,nofollow" : "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"}" />
+    <meta name="googlebot" content="${noindex ? "noindex,nofollow" : "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"}" />
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="${escapeHtml(absoluteUrl("/sitemap.xml"))}" />
+    <link rel="alternate" type="application/rss+xml" title="UniformWiki" href="${escapeHtml(absoluteUrl("/feed.xml"))}" />
+    <link rel="alternate" type="text/plain" title="llms.txt" href="${escapeHtml(absoluteUrl("/llms.txt"))}" />
+    ${options.markdownUrl ? `<link rel="alternate" type="text/markdown" title="Markdown" href="${escapeHtml(absoluteUrl(options.markdownUrl))}" />` : ""}
     <link rel="preconnect" href="https://fonts.bunny.net" />
     <link href="https://fonts.bunny.net/css2?family=Inter:wght@300;400;500;600&amp;family=Roboto+Condensed:wght@400;700;900&amp;display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/assets/thisline.css" />
@@ -101,10 +149,9 @@ export function layout(options: PageOptions, content: string): string {
         </a>
         <nav class="nav">
           ${navLink("/", "Overzicht", options.path)}
-          ${navLink("/graaf", "Graaf", options.path)}
-          ${navLink("/leemtes", "Leemtes", options.path)}
-          ${navLink("/bijdragen", "Bijdragen", options.path)}
-          ${navLink("/toegang", "Agents", options.path)}
+          ${navLink("/kennisweb", "KennisWeb", options.path)}
+          ${navLink("/aanvullen", "Aanvullen", options.path)}
+          ${navLink("/bijdragen", "Schrijven", options.path)}
           ${navLink("/privacy", "Privacy", options.path)}
         </nav>
       </div>
@@ -118,9 +165,10 @@ export function layout(options: PageOptions, content: string): string {
         <p>Kennis voor en door mensen in uniform. Gehost door THISLINE.</p>
         <nav>
           <a href="/privacy">Privacy</a>
-          <a href="/leemtes">Leemtes</a>
+          <a href="/aanvullen">Aanvullen</a>
+          <a href="/kennisweb">KennisWeb</a>
+          <a href="/toegang">Agents</a>
           <a href="https://thisline.eu" rel="noopener noreferrer">thisline.eu</a>
-          <a href="/sitemap.xml">Sitemap</a>
         </nav>
       </div>
     </footer>
@@ -157,7 +205,7 @@ export function homePage(
   const catChips = categories
     .map(
       (item) =>
-        `<a class="chip" href="/?categorie=${encodeURIComponent(item.category)}">${escapeHtml(item.category)} (${item.count})</a>`,
+        `<a class="chip" href="/?categorie=${encodeURIComponent(item.category)}">${escapeHtml(item.category)}</a>`,
     )
     .join("");
 
@@ -166,32 +214,33 @@ export function homePage(
       title: config.siteName,
       description: "Kennisbank voor brandweer, ambulance, politie, defensie en handhaving. Voor en door mensen in uniform.",
       path: "/",
+      jsonLd: organizationJsonLd(),
     },
     `
     <section>
       <p class="eyebrow">Open kennisbank</p>
       <h1>Kennis voor wie naar voren stapt.</h1>
-      <p class="lead">Kies eerst je kolom. Daarna het thema. Daarna het artikel. Hoe dieper je gaat, hoe gerichter de set. Geen medailles, geen scores. Statische indeling, gevuld door collega’s.</p>
+      <p class="lead">Kies je kolom. Daarna het thema. Daarna het artikel. Geen scores. Geen medailles. Alleen wat collega’s hebben nagekeken.</p>
     </section>
     <div class="kolom-grid">${kolomCards}</div>
-    <form method="get" action="/" class="search">
+    <form method="get" action="/" class="search home-tools">
       <label class="field" style="flex:1">
         <span class="field-label">Zoeken</span>
-        <input class="input" id="q" name="q" value="${escapeHtml(query)}" placeholder="Zoek op titel, kolom, tag of bron" />
+        <input class="input" id="q" name="q" value="${escapeHtml(query)}" placeholder="Titel, kolom, tag of bron" />
       </label>
       <button class="btn btn-primary" type="submit">Zoeken</button>
     </form>
     ${notice ? `<p class="ok">${escapeHtml(notice)}</p>` : ""}
-    <div class="chips">${catChips}<a class="chip chip-lime" href="/graaf">Open de graaf</a><a class="chip" href="/leemtes">Wat nog ontbreekt</a></div>
-    ${promoRow(query ? "search" : "home")}
+    ${catChips ? `<div class="chips">${catChips}</div>` : ""}
     <section class="mt-8">
       <div class="row-between">
         <h2>${query ? `Resultaten voor “${escapeHtml(query)}”` : "Recent"}</h2>
-        <a href="/bijdragen">Zelf iets toevoegen</a>
+        <a href="/bijdragen">Zelf schrijven</a>
       </div>
       ${empty ? `<div class="empty">Niets gevonden. Probeer een kortere term of <a href="/bijdragen">schrijf de pagina</a>.</div>` : `<div class="article-list">${articleCards}</div>`}
     </section>
     ${gaps[0] ? gapCard(gaps[0].title, gaps[0].summary, gaps[0].slug) : ""}
+    ${promoRow(query ? "search" : "home")}
     ${sponsorLine()}`,
   );
 }
@@ -201,18 +250,14 @@ export function articlePage(
   revisions: RevisionRow[],
   neighborhood: ArticleNeighborhood,
   allArticles: ArticleRow[],
+  graph: GraphPayload,
+  notice?: string,
 ): string {
   const metadata = parseStoredMetadata(article.metadata);
   const sources = sourceBlock(metadata.bronnen, metadata.ai);
   const resolve = buildLinkResolver(allArticles);
-  const metaRows = Object.entries(metadata)
-    .filter(([key, value]) => value && !["bronnen", "ai", "dienst", "diensten", "trefwoorden", "tags"].includes(key))
-    .map(
-      ([key, value]) => `<div><dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value ?? "")}</dd></div>`,
-    )
-    .join("");
   const tags = neighborhood.tags
-    .map((tag) => `<a class="chip chip-lime" href="/tag/${encodeURIComponent(tag.toLowerCase().replace(/\s+/g, "-"))}">${escapeHtml(tag)}</a>`)
+    .map((tag) => `<a class="chip" href="/tag/${encodeURIComponent(tag.toLowerCase().replace(/\s+/g, "-"))}">${escapeHtml(tag)}</a>`)
     .join("");
   const diensten = neighborhood.diensten
     .map((dienst) => `<a class="chip" href="/dienst/${encodeURIComponent(dienst.toLowerCase())}">${escapeHtml(dienst)}</a>`)
@@ -221,84 +266,99 @@ export function articlePage(
     .map(
       (item: RelatedArticle) => `<li>
         <a href="/wiki/${encodeURIComponent(item.slug)}">${escapeHtml(item.title)}</a>
-        <span>${escapeHtml(item.reasons.join(" · "))}</span>
       </li>`,
     )
     .join("");
   const backlinks = neighborhood.backlinks
     .map((item) => `<li><a href="/wiki/${encodeURIComponent(item.slug)}">${escapeHtml(item.title)}</a></li>`)
     .join("");
-  const cites = sources.citations
-    .map((item) => `<li>${escapeHtml(item.text)}</li>`)
-    .join("");
+  const cites = sources.citations.map(citationItem).join("");
   const changelog = revisions
     .map(
       (revision) => `<li>
         <span class="dot ${revision.status === "approved" ? "dot-on" : ""}"></span>
         <p>${escapeHtml(revision.title)}</p>
-        <p class="meta">${escapeHtml(revision.created_at)} · ${escapeHtml(revision.contributor_name)} · ${escapeHtml(revision.status)}</p>
+        <p class="meta">${escapeHtml(revision.created_at)} · ${escapeHtml(revision.contributor_name)}</p>
       </li>`,
     )
     .join("");
   const missing = neighborhood.missing[0];
   const dienst = neighborhood.diensten[0] ?? "";
+  const koppelOptions = allArticles
+    .filter((item) => item.slug !== article.slug)
+    .map((item) => `<option value="${escapeHtml(item.slug)}">${escapeHtml(item.title)}</option>`)
+    .join("");
 
   return layout(
     {
       title: article.title,
       description: article.summary,
       path: `/wiki/${article.slug}`,
-      jsonLd: {
-        "@context": "https://schema.org",
-        "@type": "Article",
-        headline: article.title,
-        description: article.summary,
-        articleSection: article.category,
-        dateModified: article.updated_at,
-        datePublished: article.created_at,
-        author: { "@type": "Organization", name: "THISLINE" },
-        publisher: { "@type": "Organization", name: "THISLINE", url: "https://thisline.eu" },
-      },
+      markdownUrl: `/wiki/${article.slug}.md`,
+      scripts: ["/assets/graph.js"],
+      jsonBlock: { id: "graph-data", json: JSON.stringify({ ...graph, focus: article.slug }) },
+      jsonLd: articleJsonLd(article, sources.citations),
     },
     `
     <article class="wiki-layout">
       <div>
+        ${notice ? `<p class="ok">${escapeHtml(notice)}</p>` : ""}
         <p class="eyebrow">${escapeHtml(article.category)}${dienst ? ` · ${escapeHtml(dienst)}` : ""}</p>
         <h1>${escapeHtml(article.title)}</h1>
         <p class="lead">${escapeHtml(article.summary)}</p>
-        <div class="chips">${diensten}${tags}<a class="chip" href="/graaf?focus=${encodeURIComponent(article.slug)}">Toon in de graaf</a></div>
+        <div class="article-actions">
+          <a class="btn btn-primary btn-sm" href="/bijdragen?slug=${encodeURIComponent(article.slug)}&modus=aanpassen&vast=1">Aanpassen</a>
+          <a class="btn btn-secondary btn-sm" href="/bijdragen?slug=${encodeURIComponent(article.slug)}&modus=aanvullen&vast=1">Aanvullen</a>
+        </div>
+        <div class="chips">${diensten}${tags}</div>
         <div class="prose mt-6">${renderMarkdown(article.body, resolve)}</div>
         <section class="cite ${sources.missingSources ? "is-missing" : ""}">
           <h2>Bronnen</h2>
           ${
             cites
               ? `<ol>${cites}</ol>`
-              : `<p class="hint">Er staan nog geen bronnen bij dit stuk. Weet jij waar dit vandaan komt. <a href="/bijdragen?slug=${encodeURIComponent(article.slug)}">Voeg de bronvermelding toe</a>.</p>`
+              : `<p class="hint">Er staan nog geen bronnen bij dit stuk. Weet jij waar dit vandaan komt. <a href="/bijdragen?slug=${encodeURIComponent(article.slug)}&modus=aanpassen&vast=1">Voeg de bron toe</a>.</p>`
           }
           <p class="ai-note ${sources.missingAi ? "is-missing" : ""}">${escapeHtml(aiLabel(sources.ai))}</p>
+        </section>
+        <section class="kennisweb-block">
+          <p class="eyebrow">KennisWeb</p>
+          <h2>Wat hierbij hoort</h2>
+          <p class="hint">Koppel zelf een artikel. De koppeling gaat eerst langs keuring.</p>
+          <p id="kennisweb-leeg" class="empty" hidden>Nog te weinig koppelingen voor dit stuk.</p>
+          <div class="graph-wrap graph-wrap-article"><canvas id="kennisweb" width="1100" height="360" aria-label="KennisWeb"></canvas></div>
+          <form method="post" action="/wiki/${encodeURIComponent(article.slug)}/koppel" class="koppel-form">
+            <label class="field" style="flex:1">
+              <span class="field-label">Koppel een artikel</span>
+              <select class="input" name="target" required>
+                <option value="">Kies een artikel</option>
+                ${koppelOptions}
+              </select>
+            </label>
+            <button class="btn btn-secondary" type="submit">Koppelen</button>
+          </form>
         </section>
         ${missing ? gapCard(missing, "Deze pagina verwijst ernaar, maar het artikel bestaat nog niet.", missing) : ""}
         ${promoRow("article", dienst)}
         ${sponsorLine()}
       </div>
-      <aside class="stack">
-        <section class="card">
+      <aside class="stack wiki-side">
+        <section>
           <h2 class="h3">Hoort bij</h2>
-          <ul class="rel-list">${related || `<li class="meta">Nog geen gerichte buren. Voeg een tag, kolom of [[verwijzing]] toe.</li>`}</ul>
+          <ul class="rel-list">${related || `<li class="meta">Nog geen gerichte buren.</li>`}</ul>
         </section>
-        <section class="card">
+        ${
+          backlinks
+            ? `<section>
           <h2 class="h3">Vermeld op</h2>
-          <ul class="rel-list">${backlinks || `<li class="meta">Nog geen terugverwijzingen.</li>`}</ul>
-        </section>
-        <section class="card">
-          <h2 class="h3">Metadata</h2>
-          <dl class="meta-list">${metaRows || `<p class="meta">Geen extra velden.</p>`}</dl>
-        </section>
-        <section class="card">
-          <h2 class="h3">Geschiedenis</h2>
-          <ol class="timeline">${changelog || `<li class="meta">Nog geen revisies.</li>`}</ol>
-          <p class="meta mt-4"><a href="/bijdragen?slug=${encodeURIComponent(article.slug)}">Stuur een nieuwe versie in</a></p>
-        </section>
+          <ul class="rel-list">${backlinks}</ul>
+        </section>`
+            : ""
+        }
+        <details>
+          <summary>Geschiedenis</summary>
+          <ol class="timeline mt-3">${changelog || `<li class="meta">Nog geen revisies.</li>`}</ol>
+        </details>
       </aside>
     </article>`,
   );
@@ -318,63 +378,127 @@ export function errorPage(message: string): string {
   );
 }
 
-export function contributePage(values: {
-  title?: string;
-  slug?: string;
-  category?: string;
-  dienst?: string;
-  summary?: string;
-  body?: string;
-  tags?: string;
-  bronnen?: string;
-  aiOrigin?: string;
-  name?: string;
-  note?: string;
-  notice?: string;
-  error?: string;
-}): string {
-  const diensten = ["", "Brandweer", "Ambulance", "Politie", "Defensie", "Handhaving"]
+export function contributePage(values: ContributeValues, options: ContributeOptions): string {
+  const locked = Boolean(values.locked);
+  const selectedTags = (values.tags ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const tagButtons = options.tags
+    .map((tag) => {
+      const on = selectedTags.some((item) => item.toLowerCase() === tag.toLowerCase());
+      return `<button type="button" class="chip-toggle${on ? " is-on" : ""}" data-tag="${escapeHtml(tag)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(tag)}</button>`;
+    })
+    .join("");
+  const diensten = ["", ...options.diensten]
     .map((item) => {
       const selected = (values.dienst ?? "") === item ? " selected" : "";
       return `<option value="${escapeHtml(item)}"${selected}>${item || "Kies een kolom"}</option>`;
     })
     .join("");
+  const knownCategory = options.categories.some(
+    (item) => item.toLowerCase() === (values.category ?? "").toLowerCase(),
+  );
+  const categoryOptions = [
+    `<option value="">Kies een categorie</option>`,
+    ...options.categories.map((item) => {
+      const selected = (values.category ?? "") === item ? " selected" : "";
+      return `<option value="${escapeHtml(item)}"${selected}>${escapeHtml(item)}</option>`;
+    }),
+    `<option value="__nieuw__"${values.category && !knownCategory ? " selected" : ""}>Andere, voorstellen</option>`,
+  ].join("");
   const ai = values.aiOrigin ?? "";
+  const sources = parseCitations(values.bronnen);
+  const sourceRows = (sources.length ? sources : [{ name: "", url: "" }])
+    .map(
+      (item) => `<div class="bron-row">
+        <label class="field"><span class="field-label">Naam bron</span>
+          <input class="input" name="bron_naam" data-bron-naam value="${escapeHtml(item.name)}" placeholder="Bijvoorbeeld NIPV" />
+        </label>
+        <label class="field"><span class="field-label">Link</span>
+          <input class="input" name="bron_url" data-bron-url type="url" inputmode="url" value="${escapeHtml(item.url ?? "")}" placeholder="https://" />
+        </label>
+      </div>`,
+    )
+    .join("");
+  const heading =
+    values.modus === "aanpassen" ? "Dit stuk aanpassen" : values.locked ? "Dit stuk aanvullen" : "Schrijf mee";
+
   return layout(
     {
-      title: "Bijdragen",
+      title: values.locked ? (values.modus === "aanpassen" ? "Aanpassen" : "Aanvullen") : "Schrijven",
       description: "Stuur een artikel in. Bronnen en AI-herkomst zijn verplicht.",
       path: "/bijdragen",
+      scripts: ["/assets/contribute.js"],
+      jsonBlock: { id: "mention-data", json: JSON.stringify(options.mentions) },
     },
     `
-    <section class="stack" style="max-width:42rem">
+    <section class="form-narrow stack">
       <p class="eyebrow">Voor en door de kolommen</p>
-      <h1>Schrijf mee</h1>
-      <p class="lead">Geen account. Een beheerder leest na. Bronnen zet je in de stijl: organisatie of auteur, jaar, titel, URL. Zeg altijd of AI is gebruikt.</p>
+      <h1>${heading}</h1>
+      <p class="lead">Geen account. Een beheerder leest na. Zet de naam van de bron en de link. Zeg of AI is gebruikt.</p>
+      ${values.locked ? `<p class="lock-note">Titel ligt vast. Je wijzigt of vult dit onderwerp aan, niet een ander.</p>` : ""}
       ${values.notice ? `<p class="ok">${escapeHtml(values.notice)}</p>` : ""}
       ${values.error ? `<p class="error">${escapeHtml(values.error)}</p>` : ""}
-      <form method="post" action="/bijdragen" class="card stack">
-        <label class="field"><span class="field-label">Titel</span><input class="input" name="title" required maxlength="180" value="${escapeHtml(values.title ?? "")}" /></label>
+      <form method="post" action="/bijdragen" class="stack" id="schrijf-form" data-vast="${locked ? "1" : "0"}">
+        <input type="hidden" name="slug" id="slug" value="${escapeHtml(values.slug ?? "")}" />
+        <input type="hidden" name="vast" value="${locked ? "1" : "0"}" />
+        <input type="hidden" name="modus" value="${escapeHtml(values.modus ?? "nieuw")}" />
+        <input type="hidden" name="tags" id="tags" value="${escapeHtml(values.tags ?? "")}" />
+        <input type="hidden" name="bronnen" id="bronnen" value="${escapeHtml(values.bronnen ?? "")}" />
+        <label class="field"><span class="field-label">Titel</span>
+          <input class="input" name="title" id="title" required maxlength="180" value="${escapeHtml(values.title ?? "")}" ${locked ? "readonly" : ""} />
+        </label>
         <label class="field"><span class="field-label">Kolom</span><select class="input" name="dienst" required>${diensten}</select></label>
-        <label class="field"><span class="field-label">Categorie</span><input class="input" name="category" required maxlength="80" value="${escapeHtml(values.category ?? "")}" placeholder="Bijvoorbeeld Uitrusting" /></label>
-        <label class="field"><span class="field-label">Tags</span><input class="input" name="tags" value="${escapeHtml(values.tags ?? "")}" placeholder="kommagescheiden, zoals hesje, EN ISO 20471" /></label>
-        <label class="field"><span class="field-label">Slug (leeg = nieuw, of de bestaande slug om te verbeteren)</span><input class="input" name="slug" value="${escapeHtml(values.slug ?? "")}" /></label>
-        <label class="field"><span class="field-label">Korte samenvatting</span><textarea class="textarea" name="summary" rows="2">${escapeHtml(values.summary ?? "")}</textarea></label>
-        <label class="field"><span class="field-label">Tekst</span>
-          <textarea class="textarea" name="body" required rows="14">${escapeHtml(values.body ?? "Koppel met [[Naam van artikel]].\n")}</textarea>
-          <span class="hint">Verwijs met [[titel]]. Ontbrekende links worden een verzoek aan de volgende collega.</span>
+        <label class="field"><span class="field-label">Categorie</span>
+          <select class="input" name="category" id="category" required>${categoryOptions}</select>
         </label>
-        <label class="field"><span class="field-label">Bronnen, één per regel</span>
-          <textarea class="textarea" name="bronnen" required rows="4" placeholder="NEN. (2013). NEN-EN-ISO 20471:2013 High visibility clothing.">${escapeHtml(values.bronnen ?? "")}</textarea>
-          <span class="hint">Organisatie of auteur. (Jaar). Titel. Uitgever of URL.</span>
+        <label class="field" id="category-new-wrap" ${values.category && !knownCategory ? "" : "hidden"}>
+          <span class="field-label">Nieuwe categorie</span>
+          <input class="input" name="category_new" id="category_new" maxlength="80" value="${escapeHtml(values.categoryNew ?? (!knownCategory ? (values.category ?? "") : ""))}" placeholder="Bijvoorbeeld Uitrusting" />
+          <span class="hint">Die ziet een ander pas in de lijst na keuring.</span>
         </label>
-        <fieldset class="field">
-          <legend class="field-label">Herkomst van de tekst</legend>
-          <div class="radio-row">
-            <label><input type="radio" name="ai_origin" value="mens" ${ai === "mens" ? "checked" : ""} required /> Door een mens geschreven, zonder generatieve AI voor de inhoud</label>
-            <label><input type="radio" name="ai_origin" value="ai-ondersteund" ${ai === "ai-ondersteund" ? "checked" : ""} /> Met AI-ondersteuning, nagekeken door een mens</label>
-            <label><input type="radio" name="ai_origin" value="ai-gegenereerd" ${ai === "ai-gegenereerd" ? "checked" : ""} /> Met AI opgesteld, nagekeken voordat het live mag</label>
+        <div class="field">
+          <span class="field-label">Tags</span>
+          <div class="chip-pick" id="tag-pick">${tagButtons}</div>
+          <div class="tag-add mt-3">
+            <input class="input" id="tag-new" maxlength="40" placeholder="Nieuwe tag voorstellen" />
+            <button class="btn btn-secondary" type="button" id="tag-add">Toevoegen</button>
           </div>
+          <span class="hint">Kies uit de lijst. Een nieuwe tag keurt een beheerder eerst.</span>
+        </div>
+        <label class="field"><span class="field-label">Korte samenvatting</span><textarea class="textarea" name="summary" rows="2">${escapeHtml(values.summary ?? "")}</textarea></label>
+        <div class="field mention-wrap">
+          <label class="field-label" for="body">Tekst</label>
+          <div class="editor-bar">
+            <button class="btn btn-ghost btn-sm" type="button" id="fmt-ul">Lijst</button>
+            <button class="btn btn-ghost btn-sm" type="button" id="fmt-ol">Nummers</button>
+            <button class="btn btn-ghost btn-sm" type="button" id="fmt-at">Koppel @</button>
+          </div>
+          <textarea class="textarea" name="body" id="body" required rows="14">${escapeHtml(values.body ?? "")}</textarea>
+          <div class="mention-menu" id="mention-menu" hidden></div>
+          <span class="hint">Plakken mag. We houden platte tekst, lijsten en interne koppelingen. Typ @ en kies een artikel. Dat wordt @artikelnaam.</span>
+        </div>
+        <div class="field">
+          <span class="field-label">Bronnen</span>
+          <div id="bron-list" class="stack">${sourceRows}</div>
+          <button class="btn btn-ghost btn-sm mt-3" type="button" id="bron-add">Nog een bron</button>
+          <span class="hint">Naam van de bron en de link. De link opent later in een nieuw venster.</span>
+        </div>
+        <fieldset class="choice-set">
+          <legend class="field-label">Herkomst van de tekst</legend>
+          <label class="choice">
+            <input type="radio" name="ai_origin" value="mens" ${ai === "mens" ? "checked" : ""} required />
+            <span><strong>Door een mens</strong><span>Zonder generatieve AI voor de inhoud.</span></span>
+          </label>
+          <label class="choice">
+            <input type="radio" name="ai_origin" value="ai-ondersteund" ${ai === "ai-ondersteund" ? "checked" : ""} />
+            <span><strong>Met AI-hulp</strong><span>AI heeft geholpen. Een mens heeft nagekeken.</span></span>
+          </label>
+          <label class="choice">
+            <input type="radio" name="ai_origin" value="ai-gegenereerd" ${ai === "ai-gegenereerd" ? "checked" : ""} />
+            <span><strong>Met AI opgesteld</strong><span>De tekst komt van AI. Een mens keurt na vóór live.</span></span>
+          </label>
         </fieldset>
         <label class="field"><span class="field-label">Jouw naam of initialen (optioneel)</span><input class="input" name="contributor_name" value="${escapeHtml(values.name ?? "")}" /></label>
         <label class="field"><span class="field-label">Toelichting voor de beheerder</span><input class="input" name="contributor_note" value="${escapeHtml(values.note ?? "")}" /></label>
@@ -387,23 +511,17 @@ export function contributePage(values: {
 export function accessPage(): string {
   return layout(
     {
-      title: "Toegang voor agents",
-      description: "MCP- en API-toegang tot UniformWiki.",
+      title: "Agents",
+      description: "Neem contact op voor een licentie om AI en agents te koppelen.",
       path: "/toegang",
     },
-    `<section style="max-width:42rem">
-      <h1>Toegang voor AI-agents</h1>
-      <p class="lead">Mensen lezen de wiki in Europa gratis. Agents die programmatisch ophalen, doen dat met een licentiesleutel uit FluentCart.</p>
-      <ol class="steps">
-        <li>Licentie in de webshop.</li>
-        <li>FluentCart stuurt een webhook.</li>
-        <li>Er ontstaat een sleutel <code class="k">uw_live_…</code>.</li>
-      </ol>
-      <div class="card mt-6">
-        <p><strong>MCP</strong> — <code class="k">POST ${escapeHtml(config.publicBaseUrl)}/api/v1/mcp</code></p>
-        <p class="mt-3"><strong>Header</strong> — <code class="k">Authorization: Bearer uw_live_…</code></p>
-        <p class="mt-3">Tools: <code class="k">get_uniform_article</code>, <code class="k">search_uniform_articles</code>, <code class="k">get_related_articles</code>.</p>
-      </div>
+    `<section class="form-narrow">
+      <p class="eyebrow">Agents</p>
+      <h1>AI en agents koppelen</h1>
+      <p class="lead">Wil je AI of agents koppelen aan deze wiki, zodat we samen betere informatie bouwen over Nederlandse uniforme diensten.</p>
+      <p>Neem contact op voor een licentie.</p>
+      <p><a class="contact-mail" href="mailto:mail@contact.thisline.eu">mail@contact.thisline.eu</a></p>
+      <p class="hint mt-6">Een licentie laat een agent artikelen lezen en verzoeken indienen. Publiceren gebeurt pas na keuring. Beheer (THISLINE) kan vanuit een agent zelf publiceren en verzoeken beoordelen.</p>
     </section>`,
   );
 }
@@ -415,21 +533,21 @@ export function privacyPage(): string {
       description: "Geen tracking, geen Google Fonts, geen verkoop van gegevens.",
       path: "/privacy",
     },
-    `<section class="privacy" style="max-width:42rem">
+    `<section class="privacy form-narrow">
       <p class="eyebrow">Privacy first</p>
       <h1>Wat we wel en niet doen</h1>
       <p class="lead">UniformWiki is gemaakt om kennis te delen, niet om mensen te volgen. We slaan geen accounts van lezers op. Lettertypes komen van Bunny Fonts, niet van Google.</p>
       <h2>Lezen</h2>
       <p>Bezoeken worden niet van een naam voorzien. We zetten geen analytics, geen pixels en geen advertentienetwerken van derden. De blokken voor Pulse, Front Line Cards en het platform zijn van THISLINE zelf.</p>
-      <h2>Bijdragen</h2>
+      <h2>Schrijven</h2>
       <p>Een naam is optioneel en blijft alleen bij de revisie. BSN, e-mailadressen en Nederlandse telefoonnummers worden uit de tekst gehaald voordat iets wordt opgeslagen.</p>
       <h2>Beheer</h2>
       <p>Er is één HttpOnly-cookie, alleen op /beheer, alleen als je als beheerder inlogt.</p>
       <h2>Licenties</h2>
-      <p>E-mail van webshopklanten staat bij de MCP-sleutel, omdat de licentie anders niet te koppelen is. Dat is geen mailinglijst.</p>
+      <p>Wie AI of agents wil koppelen, vraagt een licentie aan via mail@contact.thisline.eu. E-mail bij een licentie is geen mailinglijst.</p>
       <h2>Europa</h2>
-      <p>De wiki draait in Europa en is bedoeld voor bezoek uit Europa. Buiten Europa laten we het verkeer bewust buiten, zodat de hosting klein en betaalbaar blijft.</p>
-      <p class="meta mt-6">Vragen: <a href="mailto:martijn@thisline.eu">martijn@thisline.eu</a></p>
+      <p>De wiki draait in Europa en is bedoeld voor bezoek uit Europa. Zoekmachines en AI-crawlers laten we wél binnen, zodat de kennis vindbaar blijft.</p>
+      <p class="meta mt-6">Vragen: <a href="mailto:mail@contact.thisline.eu">mail@contact.thisline.eu</a></p>
     </section>`,
   );
 }
@@ -437,24 +555,24 @@ export function privacyPage(): string {
 export function graphPage(payload: { nodes: unknown[]; edges: unknown[] }, focus = ""): string {
   return layout(
     {
-      title: "Kennisgraaf",
+      title: "KennisWeb",
       description: "Zie in één beeld wat bij een thema, tag of kolom hoort.",
-      path: "/graaf",
+      path: "/kennisweb",
       scripts: ["/assets/graph.js"],
       jsonBlock: { id: "graph-data", json: JSON.stringify({ ...payload, focus }) },
     },
     `
     <section>
-      <p class="eyebrow">Netwerk</p>
-      <h1>Wat hoort bij dit thema.</h1>
-      <p class="lead">Artikelen, kolommen, tags en [[verwijzingen]]. Sleep, zoom, klik. Geen speeltuin. Statische relaties uit de teksten zelf.</p>
+      <p class="eyebrow">Wat bij elkaar hoort</p>
+      <h1>KennisWeb</h1>
+      <p class="lead">Artikelen, kolommen, tags en verwijzingen. Sleep, zoom, klik. Alleen relaties uit de teksten zelf. Onder elk artikel kun je zelf een koppeling leggen.</p>
       <div class="chips">
-        <a class="chip ${!focus ? "chip-lime" : ""}" href="/graaf">Alles</a>
+        <a class="chip ${!focus ? "chip-lime" : ""}" href="/kennisweb">Alles</a>
         ${KOLOMMEN.map((kolom) => `<a class="chip" href="/dienst/${kolom.id}">${escapeHtml(kolom.label)}</a>`).join("")}
       </div>
       <div class="graph-legend"><span>Wit · artikel</span><span>Lime · tag</span><span>Ring · kolom</span><span>Grijs · categorie</span></div>
-      <p id="graaf-leeg" class="empty" hidden>Nog te weinig koppelingen voor een graaf. Voeg [[verwijzingen]] en tags toe.</p>
-      <div class="graph-wrap"><canvas id="graaf" width="1100" height="520" aria-label="Kennisgraaf"></canvas></div>
+      <p id="kennisweb-leeg" class="empty" hidden>Nog te weinig koppelingen. Koppel een artikel met @ onder een stuk.</p>
+      <div class="graph-wrap"><canvas id="kennisweb" width="1100" height="520" aria-label="KennisWeb"></canvas></div>
     </section>
     ${promoRow("graaf")}
     ${sponsorLine()}`,
@@ -477,7 +595,7 @@ export function dienstPage(
     )
     .join("");
   const themeChips = themes
-    .map((theme) => `<a class="chip" href="/bijdragen?slug=${encodeURIComponent(theme.slug)}&title=${encodeURIComponent(theme.title)}">${escapeHtml(theme.title)}</a>`)
+    .map((theme) => `<a class="chip" href="/bijdragen?slug=${encodeURIComponent(theme.slug)}&title=${encodeURIComponent(theme.title)}&vast=1">${escapeHtml(theme.title)}</a>`)
     .join("");
   return layout(
     {
@@ -489,8 +607,8 @@ export function dienstPage(
     <section>
       <p class="eyebrow">Kolom</p>
       <h1>${escapeHtml(label)}</h1>
-      <p class="lead">${escapeHtml(summary)} De thema’s hieronder zijn vast. Artikelen vullen ze. Wat leeg is, mag jij schrijven.</p>
-      <div class="chips">${themeChips}<a class="chip chip-lime" href="/graaf">Graaf</a></div>
+      <p class="lead">${escapeHtml(summary)} De thema’s hieronder liggen vast. Artikelen vullen ze. Wat leeg is, mag jij aanvullen.</p>
+      <div class="chips">${themeChips}</div>
     </section>
     <section class="mt-8">${list || `<div class="empty">Nog geen goedgekeurde stukken in deze kolom.</div>`}</section>
     ${gaps.slice(0, 3).map((gap) => gapCard(gap.title, gap.summary, gap.slug)).join("")}
@@ -522,16 +640,16 @@ export function gapsPage(gaps: ReturnType<typeof findGaps>): string {
     .join("");
   return layout(
     {
-      title: "Leemtes",
+      title: "Aanvullen",
       description: "Thema’s en verwijzingen die nog een artikel missen.",
-      path: "/leemtes",
+      path: "/aanvullen",
     },
     `<section>
-      <p class="eyebrow">Vullen jullie</p>
-      <h1>Hier ontbreekt nog iets.</h1>
-      <p class="lead">De kolommen en thema’s liggen vast. De stukken komen van mensen in uniform. Weet jij er wat van, schrijf het op, met bron.</p>
+      <p class="eyebrow">Wat nog openstaat</p>
+      <h1>Aanvullen</h1>
+      <p class="lead">De kolommen en thema’s liggen vast. De stukken komen van mensen in uniform. Ken je dit, vul het aan, met bron.</p>
     </section>
-    ${items || `<div class="empty">Geen open leemtes. Dat is zeldzaam. Controleer de graaf.</div>`}
+    ${items || `<div class="empty">Niets open. Dat is zeldzaam. Kijk bij samenhang of schrijf zelf.</div>`}
     ${promoRow("gap")}
     ${sponsorLine()}`,
   );
@@ -563,6 +681,9 @@ function statusBadge(status: string): string {
     admin: "badge-lime",
     mcp: "badge-wait",
     public_read: "badge-off",
+    tag: "badge-wait",
+    category: "badge-ok",
+    dienst: "badge-lime",
   };
   return `<span class="badge ${map[status] ?? "badge-off"}">${escapeHtml(status)}</span>`;
 }
@@ -571,6 +692,7 @@ export function adminDashboard(input: {
   pending: Array<RevisionRow & { slug: string }>;
   articles: ArticleRow[];
   keys: ApiKeyRow[];
+  vocab: VocabRow[];
   notice?: string;
 }): string {
   const pendingRows = input.pending
@@ -593,6 +715,27 @@ export function adminDashboard(input: {
           </form>
         </div>
         <details class="mt-4"><summary>Tekst bekijken</summary><div class="prose mt-3">${renderMarkdown(item.body)}</div></details>
+      </article>`,
+    )
+    .join("");
+  const vocabRows = input.vocab
+    .map(
+      (item) => `<article class="card">
+        <p class="eyebrow">${escapeHtml(item.kind)}</p>
+        <h3 class="h3">${escapeHtml(item.label)}</h3>
+        <p class="meta">${escapeHtml(item.created_at)}</p>
+        <div class="row mt-4">
+          <form method="post" action="/beheer/vocab">
+            <input type="hidden" name="vocab_id" value="${item.id}" />
+            <input type="hidden" name="decision" value="approved" />
+            <button class="btn btn-primary btn-sm" type="submit">Goedkeuren</button>
+          </form>
+          <form method="post" action="/beheer/vocab">
+            <input type="hidden" name="vocab_id" value="${item.id}" />
+            <input type="hidden" name="decision" value="rejected" />
+            <button class="btn btn-danger btn-sm" type="submit">Afwijzen</button>
+          </form>
+        </div>
       </article>`,
     )
     .join("");
@@ -621,7 +764,7 @@ export function adminDashboard(input: {
     { title: "Beheer", description: "Moderatie en licenties.", path: "/beheer" },
     `
     <div class="row-between">
-      <div><h1>Beheer</h1><p class="lead">Keur bijdragen, check bronnen en AI-herkomst, exporteer een backup.</p></div>
+      <div><h1>Beheer</h1><p class="lead">Keur bijdragen, tags en categorieën. Check bronnen. Exporteer een backup.</p></div>
       <div class="row">
         <a class="btn btn-secondary" href="/beheer/export.json">JSON-export</a>
         <form method="post" action="/beheer/logout"><button class="btn btn-ghost" type="submit">Uitloggen</button></form>
@@ -629,14 +772,16 @@ export function adminDashboard(input: {
     </div>
     ${input.notice ? `<p class="ok">${escapeHtml(input.notice)}</p>` : ""}
     <section class="mt-8"><h2>Wachtend op keuring</h2><div class="stack mt-4">${pendingRows || `<p class="empty">Geen openstaande bijdragen.</p>`}</div></section>
+    <section class="mt-8"><h2>Nieuwe tags en categorieën</h2><div class="stack mt-4">${vocabRows || `<p class="empty">Geen openstaande voorstellen.</p>`}</div></section>
     <section class="mt-8">
       <h2>Direct publiceren</h2>
       <form method="post" action="/beheer/artikel" class="card grid-2 mt-4">
         <label class="field span-2"><span class="field-label">Titel</span><input class="input" name="title" required /></label>
         <label class="field"><span class="field-label">Kolom</span><input class="input" name="dienst" placeholder="Brandweer" /></label>
         <label class="field"><span class="field-label">Categorie</span><input class="input" name="category" required /></label>
+        <label class="field"><span class="field-label">Naam bron</span><input class="input" name="bron_naam" required placeholder="NIPV" /></label>
+        <label class="field"><span class="field-label">Link</span><input class="input" name="bron_url" type="url" placeholder="https://" /></label>
         <label class="field span-2"><span class="field-label">Tags</span><input class="input" name="tags" /></label>
-        <label class="field span-2"><span class="field-label">Bronnen</span><textarea class="textarea" name="bronnen" required rows="3"></textarea></label>
         <label class="field span-2"><span class="field-label">AI-herkomst</span>
           <select class="input" name="ai_origin" required>
             <option value="mens">Mens</option>
