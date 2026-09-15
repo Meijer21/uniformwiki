@@ -54,6 +54,11 @@ function html(reply: FastifyReply, status: number, body: string): FastifyReply {
   return reply.code(status).header("content-type", "text/html; charset=utf-8").send(body);
 }
 
+/** Fastify heeft geen serializer voor XML; een Buffer gaat als ruwe bytes. */
+function xml(reply: FastifyReply, body: string, contentType: string): FastifyReply {
+  return reply.header("content-type", contentType).send(Buffer.from(body, "utf8"));
+}
+
 function readString(body: unknown, key: string): string {
   if (!body || typeof body !== "object") {
     return "";
@@ -503,10 +508,10 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
   app.get("/sitemap.xml", async (request, reply) => {
     try {
       const articles = await listApprovedArticles();
-      return reply.header("content-type", "application/xml; charset=utf-8").send(sitemapXml(articles));
+      return xml(reply, sitemapXml(articles), "application/xml; charset=utf-8");
     } catch (error) {
       request.log.error({ err: error }, "Sitemap mislukt");
-      return reply.code(500).send("sitemap error");
+      return reply.code(500).type("text/plain; charset=utf-8").send("sitemap error");
     }
   });
 
@@ -517,7 +522,7 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/feed.xml", async (_request, reply) => {
     const articles = await listApprovedArticles();
-    return reply.header("content-type", "application/rss+xml; charset=utf-8").send(rssXml(articles));
+    return xml(reply, rssXml(articles), "application/rss+xml; charset=utf-8");
   });
 
   app.get("/openapi.json", async (_request, reply) => reply.send(openApiJson()));
