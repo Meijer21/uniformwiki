@@ -47,15 +47,24 @@ export const CONTRIBUTE_JS = `(function () {
     if (!locked) syncSlug();
   }
 
+  function syncNewField(select, wrap, input, focus) {
+    if (!select || !wrap) return;
+    var open = select.value === "__nieuw__";
+    wrap.hidden = !open;
+    if (open && focus && input) input.focus();
+  }
+
   if (category) {
     category.addEventListener("change", function () {
-      if (category.value === "__nieuw__" && categoryNew) categoryNew.focus();
+      syncNewField(category, document.getElementById("category-new-wrap"), categoryNew, true);
     });
+    syncNewField(category, document.getElementById("category-new-wrap"), categoryNew, false);
   }
   if (dienst) {
     dienst.addEventListener("change", function () {
-      if (dienst.value === "__nieuw__" && dienstNew) dienstNew.focus();
+      syncNewField(dienst, document.getElementById("dienst-new-wrap"), dienstNew, true);
     });
+    syncNewField(dienst, document.getElementById("dienst-new-wrap"), dienstNew, false);
   }
 
   function selectedTags() {
@@ -92,8 +101,8 @@ export const CONTRIBUTE_JS = `(function () {
       });
       if (exists) return;
       var label = document.createElement("label");
-      label.className = "md-check";
-      label.innerHTML = '<input type="checkbox" name="tag" value="' + item.replace(/"/g, "&quot;") + '" checked /> ' + item.replace(/</g, "&lt;") + " (wacht op keuring)";
+      label.className = "chip-toggle";
+      label.innerHTML = '<input type="checkbox" name="tag" value="' + item.replace(/"/g, "&quot;") + '" checked /> <span>' + item.replace(/</g, "&lt;") + " (wacht op keuring)</span>";
       tagPick.appendChild(label);
     });
   }

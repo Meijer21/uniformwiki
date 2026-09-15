@@ -31,7 +31,7 @@ THISLINE. (2026). Merkwaarheidsdocument v2.0.`,
     title: "Hoe je bijdraagt",
     category: "Over",
     dienst: "",
-    summary: "Schrijf mee zonder account. Bronnen en AI-herkomst zijn verplicht.",
+    summary: "Stuur een artikel in zonder account. Bronnen en AI-herkomst zijn verplicht.",
     body: `Iedereen in uniform mag een artikel voorstellen. Geen Git, geen editor, geen inlog.
 
 1. Kies je [[kolom]]

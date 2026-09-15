@@ -4,6 +4,7 @@ import { GRAPH_JS } from "../assets/graph-js.js";
 import { THISLINE_CSS } from "../assets/thisline-css.js";
 import { isIndexingBot } from "../lib/crawlers.js";
 import { isProduction } from "../config.js";
+import { CSS_FILE, CONTRIBUTE_JS_FILE, GRAPH_JS_FILE } from "../lib/assets.js";
 import { isEuropeanCountry, requestCountryCode } from "../lib/europe.js";
 
 const SKIP_GEO = new Set(["/healthz", "/robots.txt", "/sitemap.xml", "/llms.txt", "/feed.xml", "/openapi.json"]);
@@ -31,32 +32,53 @@ function limited(ip: string, max: number, windowMs: number): boolean {
 
 function europeBlockedPage(): string {
   return `<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>Alleen Europa</title>
-<link rel="stylesheet" href="/assets/thisline.css">
+<style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:3rem auto;padding:0 1.25rem;color:#202124}a{color:#188038}</style>
 </head>
-<body><main class="shell site-main"><h1>Deze wiki is alleen in Europa te lezen.</h1>
-<p class="lead">THISLINE houdt de hosting klein. Bezoek van buiten Europa laten we buiten.</p>
+<body><main><h1>Deze wiki is alleen in Europa te lezen</h1>
+<p>THISLINE host UniformWiki in Europa. Bezoek van buiten Europa laten we buiten.</p>
 <p><a href="https://thisline.eu">thisline.eu</a></p></main></body></html>`;
 }
 
 export function registerHttpGuards(app: FastifyInstance): void {
+  app.get(CSS_FILE, async (_request, reply) => {
+    return reply
+      .header("content-type", "text/css; charset=utf-8")
+      .header("cache-control", "public, max-age=31536000, immutable")
+      .send(THISLINE_CSS);
+  });
+
   app.get("/assets/thisline.css", async (_request, reply) => {
     return reply
       .header("content-type", "text/css; charset=utf-8")
-      .header("cache-control", "public, max-age=3600, stale-while-revalidate=86400")
+      .header("cache-control", "no-store")
       .send(THISLINE_CSS);
+  });
+
+  app.get(GRAPH_JS_FILE, async (_request, reply) => {
+    return reply
+      .header("content-type", "application/javascript; charset=utf-8")
+      .header("cache-control", "public, max-age=31536000, immutable")
+      .send(GRAPH_JS);
   });
 
   app.get("/assets/graph.js", async (_request, reply) => {
     return reply
       .header("content-type", "application/javascript; charset=utf-8")
-      .header("cache-control", "public, max-age=3600, stale-while-revalidate=86400")
+      .header("cache-control", "no-store")
       .send(GRAPH_JS);
+  });
+
+  app.get(CONTRIBUTE_JS_FILE, async (_request, reply) => {
+    return reply
+      .header("content-type", "application/javascript; charset=utf-8")
+      .header("cache-control", "public, max-age=31536000, immutable")
+      .send(CONTRIBUTE_JS);
   });
 
   app.get("/assets/contribute.js", async (_request, reply) => {
     return reply
       .header("content-type", "application/javascript; charset=utf-8")
-      .header("cache-control", "public, max-age=3600, stale-while-revalidate=86400")
+      .header("cache-control", "no-store")
       .send(CONTRIBUTE_JS);
   });
 
@@ -77,7 +99,7 @@ export function registerHttpGuards(app: FastifyInstance): void {
       [
         "default-src 'self'",
         "img-src 'self' data:",
-        "style-src 'self' https://fonts.bunny.net",
+        "style-src 'self' 'unsafe-inline' https://fonts.bunny.net",
         "font-src https://fonts.bunny.net",
         "script-src 'self'",
         "connect-src 'self'",
@@ -123,7 +145,7 @@ export function registerHttpGuards(app: FastifyInstance): void {
       reply.header("cache-control", "public, max-age=3600, stale-while-revalidate=86400");
       return payload;
     }
-    reply.header("cache-control", "public, s-maxage=120, stale-while-revalidate=600");
+    reply.header("cache-control", "no-store");
     reply.header("vary", "Accept-Encoding, CDN-RequestCountryCode");
     return payload;
   });

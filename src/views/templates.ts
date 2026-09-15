@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import { aiLabel, parseCitations, sourceBlock, type Citation } from "../lib/citations.js";
-import { assetUrl } from "../lib/assets.js";
+import { CSS_FILE, scriptUrl } from "../lib/assets.js";
+import { THISLINE_CSS } from "../assets/thisline-css.js";
 import { articleMatchesTheme, findGaps } from "../lib/gaps.js";
 import type { ArticleNeighborhood, GraphPayload, RelatedArticle } from "../lib/graph.js";
 import { articleDiensten, articleTags, buildLinkResolver } from "../lib/links.js";
@@ -85,14 +86,26 @@ function promoRow(placement: PromoPlacement, dienst?: string): string {
 }
 
 function sponsorLine(): string {
-  return `<p class="sponsor">Gehost door <strong>THISLINE</strong>. Voor wie naar voren stapt.</p>`;
+  return `<p class="sponsor">UniformWiki wordt gehost door THISLINE.</p>`;
 }
 
-function stukkenLabel(count: number): string {
+function articleCount(count: number): string {
   if (count === 0) {
-    return "Nog leeg";
+    return "Nog geen artikelen";
   }
-  return count === 1 ? "1 stuk" : `${count} stukken`;
+  return count === 1 ? "1 artikel" : `${count} artikelen`;
+}
+
+function serviceCard(href: string, title: string, text: string, meta: string): string {
+  return `<a class="service-card" href="${escapeHtml(href)}">
+    <h2>${escapeHtml(title)}</h2>
+    <p>${escapeHtml(text)}</p>
+    <span class="service-count">${escapeHtml(meta)}</span>
+  </a>`;
+}
+
+function serviceGrid(cards: string): string {
+  return `<div class="service-grid">${cards}</div>`;
 }
 
 function crumbs(items: Array<{ href?: string; label: string }>): string {
@@ -108,19 +121,8 @@ function crumbs(items: Array<{ href?: string; label: string }>): string {
     .join("")}</ol></nav>`;
 }
 
-function pickList(rows: string, label: string): string {
-  return `<ul class="pick-list" aria-label="${escapeHtml(label)}">${rows}</ul>`;
-}
-
-function chooseRow(href: string, title: string, text: string, meta: string): string {
-  return `<li><a class="pick-item" href="${escapeHtml(href)}">
-    <span class="pick-main">
-      <span class="pick-title">${escapeHtml(title)}</span>
-      <span class="pick-sub">${escapeHtml(text)}</span>
-    </span>
-    <span class="pick-meta">${escapeHtml(meta)}</span>
-    <span class="pick-go" aria-hidden="true">›</span>
-  </a></li>`;
+function inlineCss(): string {
+  return THISLINE_CSS.replace(/<\/style/gi, "<\\/style");
 }
 
 function articleTeaser(article: ArticleRow): string {
@@ -135,7 +137,7 @@ function articleTeaser(article: ArticleRow): string {
   </article>`;
 }
 
-function searchForm(query: string, label = "Of zoek een artikel"): string {
+function searchForm(query: string, label = "Of zoek op titel"): string {
   return `<form method="get" action="/" class="search-quiet" role="search">
     <label class="field">
       <span class="field-label">${escapeHtml(label)}</span>
@@ -149,7 +151,7 @@ function gapCard(title: string, summary: string, slug: string): string {
   return `<div class="gap">
     <p class="eyebrow">Nog open</p>
     <h2 class="h3">${escapeHtml(title)}</h2>
-    <p>${escapeHtml(summary)} Ken je dit. Vul het aan.</p>
+    <p>${escapeHtml(summary)}</p>
     <a class="btn btn-secondary" href="/bijdragen?slug=${encodeURIComponent(slug)}&title=${encodeURIComponent(title)}&vast=1">Aanvullen</a>
   </div>`;
 }
@@ -167,7 +169,7 @@ export function layout(options: PageOptions, content: string): string {
   const jsonLd = options.jsonLd ? JSON.stringify(options.jsonLd) : "";
   const noindex = options.path.startsWith("/beheer") || options.path === "/fout";
   const scripts = (options.scripts ?? [])
-    .map((src) => `<script src="${escapeHtml(assetUrl(src))}" defer></script>`)
+    .map((src) => `<script src="${escapeHtml(scriptUrl(src))}" defer></script>`)
     .join("\n");
   const jsonBlock = options.jsonBlock
     ? `<script type="application/json" id="${escapeHtml(options.jsonBlock.id)}">${options.jsonBlock.json.replace(/</g, "\\u003c")}</script>`
@@ -180,11 +182,11 @@ export function layout(options: PageOptions, content: string): string {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(pageTitle)}</title>
     <meta name="description" content="${escapeHtml(options.description)}" />
-    <meta name="theme-color" content="#202124" />
+    <meta name="theme-color" content="#188038" />
     <link rel="canonical" href="${escapeHtml(absoluteUrl(options.path))}" />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="nl_NL" />
-    <meta property="og:site_name" content="THISLINE" />
+    <meta property="og:site_name" content="UniformWiki" />
     <meta property="og:title" content="${escapeHtml(pageTitle)}" />
     <meta property="og:description" content="${escapeHtml(options.description)}" />
     <meta property="og:url" content="${escapeHtml(absoluteUrl(options.path))}" />
@@ -195,8 +197,9 @@ export function layout(options: PageOptions, content: string): string {
     <link rel="alternate" type="text/plain" title="llms.txt" href="${escapeHtml(absoluteUrl("/llms.txt"))}" />
     ${options.markdownUrl ? `<link rel="alternate" type="text/markdown" title="Markdown" href="${escapeHtml(absoluteUrl(options.markdownUrl))}" />` : ""}
     <link rel="preconnect" href="https://fonts.bunny.net" />
-    <link href="https://fonts.bunny.net/css2?family=Inter:wght@300;400;500;600&amp;family=Roboto+Condensed:wght@400;700;900&amp;display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="${escapeHtml(assetUrl("/assets/thisline.css"))}" />
+    <link href="https://fonts.bunny.net/css2?family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet" />
+    <style>${inlineCss()}</style>
+    <link rel="stylesheet" href="${escapeHtml(CSS_FILE)}" />
     ${jsonLd ? `<script type="application/ld+json">${jsonLd}</script>` : ""}
     ${jsonBlock}
     ${scripts}
@@ -206,19 +209,18 @@ export function layout(options: PageOptions, content: string): string {
     <header class="site-header">
       <div class="shell site-header-inner">
         <a class="wordmark" href="/">
-          <span class="wordmark-name">THISLINE</span>
-          <span class="wordmark-payoff">Voor wie naar voren stapt.</span>
           <span class="wordmark-product">UniformWiki</span>
+          <span class="wordmark-name">THISLINE</span>
         </a>
         <nav class="nav" aria-label="Hoofd">
           ${navLink("/", "Start", options.path)}
-          ${navLink("/bijdragen", "Schrijven", options.path)}
-          ${navLink("/kennisweb", "Samenhang", options.path)}
+          ${navLink("/bijdragen", "Nieuw artikel", options.path)}
+          ${navLink("/kennisweb", "KennisWeb", options.path)}
         </nav>
         <form class="header-search" method="get" action="/" role="search">
           <label class="skip" for="q-top">Zoeken</label>
-          <input class="input" id="q-top" type="search" name="q" placeholder="Zoeken" enterkeyhint="search" />
-          <button class="btn btn-primary btn-sm" type="submit">Zoek</button>
+          <input class="input" id="q-top" type="search" name="q" placeholder="Zoek een artikel" enterkeyhint="search" />
+          <button class="btn btn-primary btn-sm" type="submit">Zoeken</button>
         </form>
       </div>
       <div class="tl-rule"></div>
@@ -228,7 +230,7 @@ export function layout(options: PageOptions, content: string): string {
     </main>
     <footer class="site-footer">
       <div class="shell site-footer-inner">
-        <p>Kennis voor en door mensen in uniform. Gehost door THISLINE.</p>
+        <p>Kennis over kleding en uitrusting in de kolommen. Gehost door THISLINE.</p>
         <nav>
           <a href="/privacy">Privacy</a>
           <a href="/aanvullen">Aanvullen</a>
@@ -256,7 +258,7 @@ export function homePage(
       const count = articles.filter((article) =>
         articleDiensten(article).some((dienst) => dienst.toLowerCase() === kolom.label.toLowerCase()),
       ).length;
-      return chooseRow(`/dienst/${encodeURIComponent(kolom.id)}`, kolom.label, kolom.summary, stukkenLabel(count));
+      return serviceCard(`/dienst/${encodeURIComponent(kolom.id)}`, kolom.label, kolom.summary, articleCount(count));
     })
     .join("");
   const resultList = results.map(articleTeaser).join("");
@@ -278,7 +280,7 @@ export function homePage(
       ${notice ? `<p class="ok">${escapeHtml(notice)}</p>` : ""}
       ${searchForm(query, "Zoeken")}
       <section class="mt-6" aria-live="polite">
-        ${empty ? `<div class="empty">Niets gevonden. Kies een dienst of <a href="/bijdragen">schrijf de pagina</a>.</div>` : `<div class="article-list">${resultList}</div>`}
+        ${empty ? `<div class="empty">Niets gevonden. Kies een dienst of <a href="/bijdragen">schrijf een artikel</a>.</div>` : `<div class="article-list">${resultList}</div>`}
       </section>
     </div>
     ${sponsorLine()}`,
@@ -288,19 +290,18 @@ export function homePage(
   return layout(
     {
       title: config.siteName,
-      description: "Kies eerst een dienst. Daarna een thema, daarna het artikel.",
+      description: "Kies een dienst. Daarna een thema, daarna het artikel.",
       path: "/",
       jsonLd: organizationJsonLd(),
     },
     `
     <div class="home-start">
       <section>
-        <p class="eyebrow">UniformWiki</p>
-        <h1>Welke dienst?</h1>
-        <p class="lead">Eén keuze. Daarna volgt het thema. Daarna het artikel.</p>
+        <h1>Kies een dienst</h1>
+        <p class="lead">Daarna kies je een thema. Daarna het artikel.</p>
       </section>
       ${notice ? `<p class="ok">${escapeHtml(notice)}</p>` : ""}
-      ${pickList(kolomRows, "Diensten")}
+      ${serviceGrid(kolomRows)}
       ${searchForm("")}
     </div>
     ${sponsorLine()}`,
@@ -379,7 +380,7 @@ export function articlePage(
           ${
             cites
               ? `<ol>${cites}</ol>`
-              : `<p class="hint">Er staan nog geen bronnen bij dit stuk. Weet jij waar dit vandaan komt. <a href="/bijdragen?slug=${encodeURIComponent(article.slug)}&modus=aanpassen&vast=1">Voeg de bron toe</a>.</p>`
+              : `<p class="hint">Er staan nog geen bronnen bij dit artikel. <a href="/bijdragen?slug=${encodeURIComponent(article.slug)}&modus=aanpassen&vast=1">Voeg een bron toe</a>.</p>`
           }
           <p class="ai-note ${sources.missingAi ? "is-missing" : ""}">${escapeHtml(aiLabel(sources.ai))}</p>
         </section>
@@ -450,7 +451,7 @@ export function contributePage(values: ContributeValues, options: ContributeOpti
   const tagButtons = options.tags
     .map((tag) => {
       const on = selectedTags.some((item) => item.toLowerCase() === tag.toLowerCase());
-      return `<label class="md-check"><input type="checkbox" name="tag" value="${escapeHtml(tag)}"${on ? " checked" : ""} /> ${escapeHtml(tag)}</label>`;
+      return `<label class="chip-toggle"><input type="checkbox" name="tag" value="${escapeHtml(tag)}"${on ? " checked" : ""} /> <span>${escapeHtml(tag)}</span></label>`;
     })
     .join("");
   const knownDienst = options.diensten.some((item) => item.toLowerCase() === (values.dienst ?? "").toLowerCase());
@@ -460,7 +461,7 @@ export function contributePage(values: ContributeValues, options: ContributeOpti
       const selected = (values.dienst ?? "") === item ? " selected" : "";
       return `<option value="${escapeHtml(item)}"${selected}>${escapeHtml(item)}</option>`;
     }),
-    `<option value="__nieuw__"${values.dienst && !knownDienst ? " selected" : ""}>Andere dienst, voorstellen</option>`,
+    `<option value="__nieuw__"${values.dienst && !knownDienst ? " selected" : ""}>Andere dienst</option>`,
   ].join("");
   const knownCategory = options.categories.some(
     (item) => item.toLowerCase() === (values.category ?? "").toLowerCase(),
@@ -471,7 +472,7 @@ export function contributePage(values: ContributeValues, options: ContributeOpti
       const selected = (values.category ?? "") === item ? " selected" : "";
       return `<option value="${escapeHtml(item)}"${selected}>${escapeHtml(item)}</option>`;
     }),
-    `<option value="__nieuw__"${values.category && !knownCategory ? " selected" : ""}>Andere, voorstellen</option>`,
+    `<option value="__nieuw__"${values.category && !knownCategory ? " selected" : ""}>Andere categorie</option>`,
   ].join("");
   const ai = values.aiOrigin ?? "";
   const sources = parseCitations(values.bronnen);
@@ -487,12 +488,14 @@ export function contributePage(values: ContributeValues, options: ContributeOpti
       </div>`,
     )
     .join("");
+  const dienstNewOpen = Boolean(values.dienst && !knownDienst);
+  const categoryNewOpen = Boolean(values.category && !knownCategory);
   const heading =
-    values.modus === "aanpassen" ? "Dit stuk aanpassen" : values.locked ? "Dit stuk aanvullen" : "Schrijf mee";
+    values.modus === "aanpassen" ? "Artikel aanpassen" : values.locked ? "Artikel aanvullen" : "Nieuw artikel";
 
   return layout(
     {
-      title: values.locked ? (values.modus === "aanpassen" ? "Aanpassen" : "Aanvullen") : "Schrijven",
+      title: values.locked ? (values.modus === "aanpassen" ? "Aanpassen" : "Aanvullen") : "Nieuw artikel",
       description: "Stuur een artikel in. Bronnen en AI-herkomst zijn verplicht.",
       path: "/bijdragen",
       scripts: ["/assets/contribute.js"],
@@ -500,10 +503,9 @@ export function contributePage(values: ContributeValues, options: ContributeOpti
     },
     `
     <section class="form-narrow stack">
-      <p class="eyebrow">Voor en door de kolommen</p>
       <h1>${heading}</h1>
-      <p class="lead">Geen account. Een beheerder leest na. Zet de naam van de bron en de link. Zeg of AI is gebruikt.</p>
-      ${values.locked ? `<p class="lock-note">Titel ligt vast. Je wijzigt of vult dit onderwerp aan, niet een ander.</p>` : ""}
+      <p class="lead">Geen account nodig. Een beheerder leest je tekst na voordat die live gaat. Vermeld bronnen en of er AI is gebruikt.</p>
+      ${values.locked ? `<p class="lock-note">De titel ligt vast. Je wijzigt of vult dit onderwerp aan, niet een ander.</p>` : ""}
       ${values.notice ? `<p class="ok">${escapeHtml(values.notice)}</p>` : ""}
       ${values.error ? `<p class="error">${escapeHtml(values.error)}</p>` : ""}
       <form method="post" action="/bijdragen" class="stack" id="schrijf-form" data-vast="${locked ? "1" : "0"}">
@@ -518,26 +520,26 @@ export function contributePage(values: ContributeValues, options: ContributeOpti
         <div class="field field-switch">
           <label class="field-label" for="dienst">Dienst</label>
           <select class="input" name="dienst" id="dienst" required>${diensten}</select>
-          <div class="when-new" id="dienst-new-wrap">
-            <label class="field-label" for="dienst_new">Nieuwe dienst</label>
+          <div class="when-new" id="dienst-new-wrap"${dienstNewOpen ? "" : " hidden"}>
+            <label class="field-label" for="dienst_new">Naam van de nieuwe dienst</label>
             <input class="input" name="dienst_new" id="dienst_new" maxlength="80" value="${escapeHtml(values.dienstNew ?? (!knownDienst ? (values.dienst ?? "") : ""))}" placeholder="Bijvoorbeeld Kustwacht" />
-            <span class="hint">Die ziet een ander pas in de lijst na keuring.</span>
+            <span class="hint">Een beheerder keurt de naam eerst.</span>
           </div>
         </div>
         <div class="field field-switch">
           <label class="field-label" for="category">Categorie</label>
           <select class="input" name="category" id="category" required>${categoryOptions}</select>
-          <div class="when-new" id="category-new-wrap">
-            <label class="field-label" for="category_new">Nieuwe categorie</label>
+          <div class="when-new" id="category-new-wrap"${categoryNewOpen ? "" : " hidden"}>
+            <label class="field-label" for="category_new">Naam van de nieuwe categorie</label>
             <input class="input" name="category_new" id="category_new" maxlength="80" value="${escapeHtml(values.categoryNew ?? (!knownCategory ? (values.category ?? "") : ""))}" placeholder="Bijvoorbeeld Uitrusting" />
-            <span class="hint">Die ziet een ander pas in de lijst na keuring.</span>
+            <span class="hint">Een beheerder keurt de naam eerst.</span>
           </div>
         </div>
         <div class="field">
           <span class="field-label">Tags</span>
           <div class="chip-pick" id="tag-pick">${tagButtons}</div>
           <div class="tag-add mt-3">
-            <input class="input" id="tag-new" name="tag_new" maxlength="40" placeholder="Nieuwe tag voorstellen" />
+            <input class="input" id="tag-new" name="tag_new" maxlength="40" placeholder="Nieuwe tag" />
             <button class="btn btn-secondary" type="button" id="tag-add">Toevoegen</button>
           </div>
           <span class="hint">Vink aan wat past. Een nieuwe tag keurt een beheerder eerst.</span>
@@ -548,11 +550,11 @@ export function contributePage(values: ContributeValues, options: ContributeOpti
           <div class="editor-bar">
             <button class="btn btn-ghost btn-sm" type="button" id="fmt-ul">Lijst</button>
             <button class="btn btn-ghost btn-sm" type="button" id="fmt-ol">Nummers</button>
-            <button class="btn btn-ghost btn-sm" type="button" id="fmt-at">Koppel @</button>
+            <button class="btn btn-ghost btn-sm" type="button" id="fmt-at">Koppel artikel</button>
           </div>
           <textarea class="textarea" name="body" id="body" required rows="14">${escapeHtml(values.body ?? "")}</textarea>
           <div class="mention-menu" id="mention-menu" hidden></div>
-          <span class="hint">Plakken mag. We houden platte tekst, lijsten en interne koppelingen. Typ @ en kies een artikel. Dat wordt @artikelnaam.</span>
+          <span class="hint">Plakken mag. We houden platte tekst, lijsten en interne koppelingen. Typ @ om een bestaand artikel te koppelen.</span>
         </div>
         <div class="field">
           <span class="field-label">Bronnen</span>
@@ -564,20 +566,29 @@ export function contributePage(values: ContributeValues, options: ContributeOpti
           <legend class="field-label">Herkomst van de tekst</legend>
           <label class="choice">
             <input type="radio" name="ai_origin" value="mens" ${ai === "mens" ? "checked" : ""} required />
-            <span><strong>Door een mens</strong><span>Zonder generatieve AI voor de inhoud.</span></span>
+            <span class="choice-text">
+              <strong>Door een mens</strong><br>
+              <span class="choice-help">Geen generatieve AI voor de inhoud.</span>
+            </span>
           </label>
           <label class="choice">
             <input type="radio" name="ai_origin" value="ai-ondersteund" ${ai === "ai-ondersteund" ? "checked" : ""} />
-            <span><strong>Met AI-hulp</strong><span>AI heeft geholpen. Een mens heeft nagekeken.</span></span>
+            <span class="choice-text">
+              <strong>Met AI-hulp</strong><br>
+              <span class="choice-help">AI heeft geholpen. Een mens heeft nagekeken.</span>
+            </span>
           </label>
           <label class="choice">
             <input type="radio" name="ai_origin" value="ai-gegenereerd" ${ai === "ai-gegenereerd" ? "checked" : ""} />
-            <span><strong>Met AI opgesteld</strong><span>De tekst komt van AI. Een mens keurt na vóór live.</span></span>
+            <span class="choice-text">
+              <strong>Met AI opgesteld</strong><br>
+              <span class="choice-help">De tekst komt van AI. Een mens keurt na vóór publicatie.</span>
+            </span>
           </label>
         </fieldset>
         <label class="field"><span class="field-label">Jouw naam of initialen (optioneel)</span><input class="input" name="contributor_name" value="${escapeHtml(values.name ?? "")}" /></label>
         <label class="field"><span class="field-label">Toelichting voor de beheerder</span><input class="input" name="contributor_note" value="${escapeHtml(values.note ?? "")}" /></label>
-        <button class="btn btn-primary" type="submit">Insturen ter beoordeling</button>
+        <button class="btn btn-primary" type="submit">Insturen</button>
       </form>
     </section>`,
   );
@@ -593,7 +604,7 @@ export function accessPage(): string {
     `<section class="form-narrow">
       <p class="eyebrow">Agents</p>
       <h1>AI en agents koppelen</h1>
-      <p class="lead">Wil je AI of agents koppelen aan deze wiki, zodat we samen betere informatie bouwen over Nederlandse uniforme diensten.</p>
+      <p class="lead">Wil je AI of agents koppelen aan deze wiki, zodat we samen betere informatie bouwen over Nederlandse uniforme diensten?</p>
       <p>Neem contact op voor een licentie.</p>
       <p><a class="contact-mail" href="mailto:mail@contact.thisline.eu">mail@contact.thisline.eu</a></p>
       <p class="hint mt-6">Een licentie laat een agent artikelen lezen en verzoeken indienen. Publiceren gebeurt pas na keuring. Beheer (THISLINE) kan vanuit een agent zelf publiceren en verzoeken beoordelen.</p>
@@ -609,9 +620,9 @@ export function privacyPage(): string {
       path: "/privacy",
     },
     `<section class="privacy form-narrow">
-      <p class="eyebrow">Privacy first</p>
+      <p class="eyebrow">Privacy</p>
       <h1>Wat we wel en niet doen</h1>
-      <p class="lead">UniformWiki is gemaakt om kennis te delen, niet om mensen te volgen. We slaan geen accounts van lezers op. Lettertypes komen van Bunny Fonts, niet van Google.</p>
+      <p class="lead">UniformWiki deelt kennis. We volgen bezoekers niet. We slaan geen accounts van lezers op. Lettertypes komen van Bunny Fonts, niet van Google.</p>
       <h2>Lezen</h2>
       <p>Bezoeken worden niet van een naam voorzien. We zetten geen analytics, geen pixels en geen advertentienetwerken van derden. De blokken voor Pulse, Front Line Cards en het platform zijn van THISLINE zelf.</p>
       <h2>Schrijven</h2>
@@ -640,7 +651,7 @@ export function graphPage(payload: { nodes: unknown[]; edges: unknown[] }, focus
     <section>
       <p class="eyebrow">Wat bij elkaar hoort</p>
       <h1>KennisWeb</h1>
-      <p class="lead">Artikelen, kolommen, tags en verwijzingen. Sleep, zoom, klik. Alleen relaties uit de teksten zelf. Onder elk artikel kun je zelf een koppeling leggen.</p>
+      <p class="lead">Artikelen, diensten, tags en verwijzingen. Sleep, zoom of klik. Alleen relaties uit de teksten zelf. Onder elk artikel kun je zelf een koppeling leggen.</p>
       <div class="chips">
         <a class="chip ${!focus ? "chip-lime" : ""}" href="/kennisweb">Alles</a>
         ${KOLOMMEN.map((kolom) => `<a class="chip" href="/dienst/${kolom.id}">${escapeHtml(kolom.label)}</a>`).join("")}
@@ -675,7 +686,7 @@ export function dienstPage(kolom: PublicColumn, articles: ArticleRow[]): string 
         <h1>${escapeHtml(kolom.label)}</h1>
         <p class="lead">${escapeHtml(kolom.summary)}</p>
       </section>
-      <section class="mt-6">${list || `<div class="empty">Nog geen goedgekeurde stukken. <a href="/bijdragen?dienst=${encodeURIComponent(kolom.label)}">Schrijf het eerste</a>.</div>`}</section>
+      <section class="mt-6">${list || `<div class="empty">Nog geen goedgekeurde artikelen. <a href="/bijdragen?dienst=${encodeURIComponent(kolom.label)}">Schrijf het eerste</a>.</div>`}</section>
       <p class="chooser-back"><a href="/">Andere dienst</a></p>
     </div>
     ${sponsorLine()}`,
@@ -684,11 +695,11 @@ export function dienstPage(kolom: PublicColumn, articles: ArticleRow[]): string 
   const rows = kolom.themes
     .map((theme) => {
       const count = articles.filter((article) => articleMatchesTheme(article, theme)).length;
-      return chooseRow(
+      return serviceCard(
         `/dienst/${encodeURIComponent(kolom.id)}/${encodeURIComponent(theme.slug)}`,
         theme.title,
         theme.summary,
-        stukkenLabel(count),
+        articleCount(count),
       );
     })
     .join("");
@@ -707,10 +718,10 @@ export function dienstPage(kolom: PublicColumn, articles: ArticleRow[]): string 
       ${crumbs([{ href: "/", label: "Start" }, { label: kolom.label }])}
       <section>
         <p class="eyebrow">${escapeHtml(kolom.label)}</p>
-        <h1>Welk thema?</h1>
+        <h1>Kies een thema</h1>
         <p class="lead">${escapeHtml(kolom.summary)}</p>
       </section>
-      ${pickList(rows, `Thema’s in ${kolom.label}`)}
+      ${serviceGrid(rows)}
       <p class="chooser-back"><a href="/">Andere dienst</a></p>
     </div>
     ${sponsorLine()}`,
@@ -747,7 +758,7 @@ export function themePage(kolom: PublicColumn, theme: Thema, articles: ArticleRo
         ${
           empty
             ? `<div class="empty">
-                <p>Dit thema heeft nog geen stuk.</p>
+                <p>Dit thema heeft nog geen artikel.</p>
                 <a class="btn btn-primary" href="/bijdragen?slug=${encodeURIComponent(theme.slug)}&title=${encodeURIComponent(theme.title)}&dienst=${encodeURIComponent(kolom.label)}&vast=1">Aanvullen</a>
               </div>`
             : `<div class="article-list">${list}</div>`
@@ -789,9 +800,9 @@ export function gapsPage(gaps: ReturnType<typeof findGaps>): string {
     `<section>
       <p class="eyebrow">Wat nog openstaat</p>
       <h1>Aanvullen</h1>
-      <p class="lead">De kolommen en thema’s liggen vast. De stukken komen van mensen in uniform. Ken je dit, vul het aan, met bron.</p>
+      <p class="lead">Thema’s die nog een artikel missen. Ken je het onderwerp, vul het aan met een bron.</p>
     </section>
-    ${items || `<div class="empty">Niets open. Dat is zeldzaam. Kijk bij samenhang of schrijf zelf.</div>`}
+    ${items || `<div class="empty">Niets open. Kijk bij KennisWeb of schrijf zelf een artikel.</div>`}
     ${promoRow("gap")}
     ${sponsorLine()}`,
   );

@@ -265,7 +265,7 @@ export function organizationJsonLd(): Record<string, unknown> {
         "@id": "https://thisline.eu/#org",
         name: "THISLINE",
         url: "https://thisline.eu",
-        description: "Voor wie naar voren stapt.",
+        description: "Kennisplatform over kleding en uitrusting van Nederlandse uniforme diensten.",
       },
       {
         "@type": "WebSite",

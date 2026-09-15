@@ -1,6 +1,6 @@
 # UniformWiki
 
-Kennisbank van THISLINE voor brandweer, ambulance, politie, defensie en handhaving. Mensen lezen de pagina’s. Agents halen dezelfde goedgekeurde tekst op via REST en MCP.
+Kennisbank van THISLINE over kleding en uitrusting van brandweer, ambulance, politie, defensie en handhaving. Mensen lezen de pagina’s. Agents halen dezelfde goedgekeurde tekst op via REST en MCP.
 
 Live: [wiki.thisline.eu](https://wiki.thisline.eu)
 
