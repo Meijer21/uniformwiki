@@ -139,7 +139,7 @@ Politiewet 2012. https://wetten.overheid.nl`,
     summary: "Het dagelijkse tenue van de basispolitiezorg, inclusief wat de wet daarover raakt.",
     body: `De basisset is het dagelijkse tenue van de politie op straat. Geen [[Ambtskostuum]], geen eigen trui over het shirt.
 
-Herkenbaarheid is het punt: burger ziet politie, collega ziet functie. [[Distinguatie]] hoort daarbij, zonder dat het een modeshow wordt. Op de rijbaan telt [[Hoge zichtbaarheid]].
+Herkenbaarheid is het punt: burger ziet politie, collega ziet functie. [[Distinctie]] hoort daarbij, zonder dat het een modeshow wordt. Op de rijbaan telt [[Hoge zichtbaarheid]].
 
 Wettelijke haakjes staan onder [[Politiewet en kleding]]. Dit artikel is geen ambtsinstructie.`,
     metadata: {

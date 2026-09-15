@@ -41,11 +41,11 @@ export const KOLOMMEN: Kolom[] = [
   {
     id: "politie",
     label: "Politie",
-    summary: "Ambtskostuum, basisset, distinguatie en wat de wet voorschrijft.",
+    summary: "Ambtskostuum, basisset, distinctie en wat de wet voorschrijft.",
     themes: [
       { slug: "ambtskostuum", title: "Ambtskostuum", summary: "Wanneer het kostuum verplicht is en wat het uitstraalt." },
       { slug: "basispolitie-kleding", title: "Basisset", summary: "Dagelijks tenue, geweldsmiddelen en zichtbaarheid." },
-      { slug: "distinguatie", title: "Distinguatie", summary: "Rang, functie en hoe je die leest zonder er een show van te maken." },
+      { slug: "distinctie", title: "Distinctie", summary: "Rang, functie en hoe je die leest zonder er een show van te maken." },
       { slug: "politiewet-kleding", title: "Politiewet en kleding", summary: "Wettelijke haakjes, niet de kantinepraat." },
     ],
   },
