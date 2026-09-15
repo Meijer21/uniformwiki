@@ -1,5 +1,6 @@
 import { parseStoredMetadata } from "./metadata.js";
 import { slugify } from "./slug.js";
+import { KOLOMMEN } from "./taxonomy.js";
 import type { ArticleRow } from "../types.js";
 
 export const DIENSTEN = [
@@ -25,6 +26,25 @@ export interface WikiLink {
 export interface ResolvedLink {
   slug: string;
   title: string;
+  href?: string;
+}
+
+const NOISE_TAGS = new Set([
+  "wiki",
+  "tag",
+  "graaf",
+  "thisline",
+  "uniformwiki",
+  "bijdragen",
+  "wikilink",
+  "ai",
+  "samenhang",
+  "kennisweb",
+  "kennisgraaf",
+]);
+
+export function publicArticleTags(article: ArticleRow): string[] {
+  return articleTags(article).filter((tag) => !NOISE_TAGS.has(tag.toLowerCase()));
 }
 
 export type LinkResolver = (target: string) => ResolvedLink | undefined;
@@ -138,11 +158,35 @@ export function mergeTagLists(...parts: Array<string | undefined>): string {
 export function buildLinkResolver(articles: ArticleRow[]): LinkResolver {
   const bySlug = new Map<string, ResolvedLink>();
   const byTitle = new Map<string, ResolvedLink>();
+  const remember = (key: string, map: Map<string, ResolvedLink>, value: ResolvedLink, overwrite = false): void => {
+    if (!key) {
+      return;
+    }
+    if (!overwrite && map.has(key)) {
+      return;
+    }
+    map.set(key, value);
+  };
   for (const article of articles) {
-    const resolved = { slug: article.slug, title: article.title };
-    bySlug.set(article.slug.toLowerCase(), resolved);
-    byTitle.set(article.title.toLowerCase(), resolved);
-    byTitle.set(slugify(article.title), resolved);
+    const resolved: ResolvedLink = { slug: article.slug, title: article.title, href: `/wiki/${encodeURIComponent(article.slug)}` };
+    remember(article.slug.toLowerCase(), bySlug, resolved, true);
+    remember(article.title.toLowerCase(), byTitle, resolved, true);
+    remember(slugify(article.title), byTitle, resolved, true);
+  }
+  for (const kolom of KOLOMMEN) {
+    const dienst: ResolvedLink = { slug: kolom.id, title: kolom.label, href: `/dienst/${kolom.id}` };
+    remember(kolom.id, bySlug, dienst);
+    remember(kolom.label.toLowerCase(), byTitle, dienst);
+    for (const theme of kolom.themes) {
+      const resolved: ResolvedLink = {
+        slug: theme.slug,
+        title: theme.title,
+        href: `/dienst/${kolom.id}/${theme.slug}`,
+      };
+      remember(theme.slug.toLowerCase(), bySlug, resolved);
+      remember(theme.title.toLowerCase(), byTitle, resolved);
+      remember(slugify(theme.title), byTitle, resolved);
+    }
   }
   return (target: string) => {
     const trimmed = target.trim();

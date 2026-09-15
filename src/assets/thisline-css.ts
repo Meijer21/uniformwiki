@@ -447,7 +447,8 @@ details summary { cursor: pointer; font-weight: 600; color: var(--focus); }
 .graph-wrap {
   margin-top: 12px;
   min-height: 420px;
-  background: #000;
+  background: #f1f3f4;
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   overflow: hidden;
 }

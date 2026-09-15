@@ -1,6 +1,6 @@
 import { slugify } from "./slug.js";
 import { KOLOMMEN } from "./taxonomy.js";
-import { parseWikiLinks } from "./links.js";
+import { buildLinkResolver, parseWikiLinks } from "./links.js";
 import type { ArticleRow } from "../types.js";
 
 export interface Gap {
@@ -15,7 +15,12 @@ export function articleMatchesTheme(
   article: ArticleRow,
   theme: { slug: string; title: string },
 ): boolean {
-  if (article.slug === theme.slug || slugify(article.title) === theme.slug) {
+  const articleSlug = slugify(article.slug);
+  const themeSlug = slugify(theme.slug);
+  if (articleSlug === themeSlug || slugify(article.title) === themeSlug) {
+    return true;
+  }
+  if (articleSlug.length >= 8 && themeSlug.length >= 8 && (themeSlug.includes(articleSlug) || articleSlug.includes(themeSlug))) {
     return true;
   }
   const title = article.title.toLowerCase();
@@ -34,6 +39,7 @@ function covered(themeTitle: string, themeSlug: string, articles: ArticleRow[]):
 export function findGaps(articles: ArticleRow[], kolomLabel?: string): Gap[] {
   const gaps: Gap[] = [];
   const seen = new Set<string>();
+  const resolve = buildLinkResolver(articles);
   const kolommen = kolomLabel
     ? KOLOMMEN.filter((kolom) => kolom.label.toLowerCase() === kolomLabel.toLowerCase() || kolom.id === kolomLabel)
     : KOLOMMEN;
@@ -61,8 +67,9 @@ export function findGaps(articles: ArticleRow[], kolomLabel?: string): Gap[] {
   for (const article of articles) {
     const articleKolom = article.dienst?.split(",")[0]?.trim() || "";
     for (const link of parseWikiLinks(article.body)) {
+      const resolved = resolve(link.target);
       const slug = slugify(link.target);
-      const exists = articles.some(
+      const exists = Boolean(resolved) || articles.some(
         (row) => row.slug === slug || row.title.toLowerCase() === link.target.trim().toLowerCase(),
       );
       if (exists) {

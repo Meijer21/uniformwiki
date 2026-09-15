@@ -24,14 +24,14 @@ export const GRAPH_JS = `(function () {
   var hover = null;
 
   var colors = {
-    bg: "#000000",
-    line: "#2a2a2a",
-    lime: "#ccff00",
-    white: "#ffffff",
-    mid: "#cccccc",
-    lo: "#888888",
-    surface: "#1a1a1a",
-    dim: "rgba(204,255,0,0.12)"
+    bg: "#f8f9fa",
+    line: "#dadce0",
+    lime: "#188038",
+    white: "#202124",
+    mid: "#5f6368",
+    lo: "#80868b",
+    surface: "#ffffff",
+    dim: "rgba(24,128,56,0.12)"
   };
 
   function visible(node) {
@@ -178,10 +178,10 @@ export const GRAPH_JS = `(function () {
       ctx.lineWidth = 1.5;
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = n.type === "tag" || n.id === fi || n === hover ? "#000000" : colors.mid;
+      ctx.fillStyle = n.type === "tag" || n.id === fi || n === hover ? "#ffffff" : colors.mid;
       if (n.type === "dienst") ctx.fillStyle = colors.lime;
-      if (n.type === "tag") ctx.fillStyle = "#000000";
-      ctx.font = "700 11px 'Roboto Condensed', sans-serif";
+      if (n.type === "tag") ctx.fillStyle = "#188038";
+      ctx.font = "600 12px Inter, system-ui, sans-serif";
       ctx.textAlign = "center";
       ctx.fillText(n.label.length > 28 ? n.label.slice(0, 26) + "…" : n.label, n.x, n.y + radius(n) + 12);
       ctx.globalAlpha = 1;

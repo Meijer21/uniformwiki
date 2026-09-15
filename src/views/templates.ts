@@ -4,7 +4,7 @@ import { CSS_FILE, scriptUrl } from "../lib/assets.js";
 import { THISLINE_CSS } from "../assets/thisline-css.js";
 import { articleMatchesTheme, findGaps } from "../lib/gaps.js";
 import type { ArticleNeighborhood, GraphPayload, RelatedArticle } from "../lib/graph.js";
-import { articleDiensten, articleTags, buildLinkResolver } from "../lib/links.js";
+import { articleDiensten, buildLinkResolver } from "../lib/links.js";
 import { escapeHtml, renderMarkdown } from "../lib/markdown.js";
 import { parseStoredMetadata } from "../lib/metadata.js";
 import { promosFor, type Promo, type PromoPlacement } from "../lib/promos.js";
@@ -147,12 +147,16 @@ function searchForm(query: string, label = "Of zoek op titel"): string {
   </form>`;
 }
 
-function gapCard(title: string, summary: string, slug: string): string {
+function gapCard(title: string, summary: string, slug: string, dienst = ""): string {
+  const params = new URLSearchParams({ slug, title, vast: "1" });
+  if (dienst) {
+    params.set("dienst", dienst);
+  }
   return `<div class="gap">
     <p class="eyebrow">Nog open</p>
     <h2 class="h3">${escapeHtml(title)}</h2>
     <p>${escapeHtml(summary)}</p>
-    <a class="btn btn-secondary" href="/bijdragen?slug=${encodeURIComponent(slug)}&title=${encodeURIComponent(title)}&vast=1">Aanvullen</a>
+    <a class="btn btn-secondary" href="/bijdragen?${params.toString()}">Aanvullen</a>
   </div>`;
 }
 
@@ -216,6 +220,7 @@ export function layout(options: PageOptions, content: string): string {
           ${navLink("/", "Start", options.path)}
           ${navLink("/bijdragen", "Nieuw artikel", options.path)}
           ${navLink("/kennisweb", "KennisWeb", options.path)}
+          ${navLink("/aanvullen", "Aanvullen", options.path)}
         </nav>
         <form class="header-search" method="get" action="/" role="search">
           <label class="skip" for="q-top">Zoeken</label>
@@ -235,7 +240,7 @@ export function layout(options: PageOptions, content: string): string {
           <a href="/privacy">Privacy</a>
           <a href="/aanvullen">Aanvullen</a>
           <a href="/kennisweb">KennisWeb</a>
-          <a href="/toegang">Agents</a>
+          <a href="/toegang">Voor AI</a>
           <a href="https://thisline.eu" rel="noopener noreferrer">thisline.eu</a>
         </nav>
       </div>
@@ -262,6 +267,9 @@ export function homePage(
     })
     .join("");
   const resultList = results.map(articleTeaser).join("");
+  const general = searching
+    ? []
+    : articles.filter((article) => articleDiensten(article).length === 0).slice(0, 6);
 
   if (searching) {
     return layout(
@@ -303,6 +311,15 @@ export function homePage(
       ${notice ? `<p class="ok">${escapeHtml(notice)}</p>` : ""}
       ${serviceGrid(kolomRows)}
       ${searchForm("")}
+      ${
+        general.length
+          ? `<section class="mt-8">
+        <h2>Algemene stukken</h2>
+        <p class="lead">Begrippen en uitleg die bij meerdere diensten horen.</p>
+        <div class="article-list mt-4">${general.map(articleTeaser).join("")}</div>
+      </section>`
+          : ""
+      }
     </div>
     ${sponsorLine()}`,
   );
@@ -402,7 +419,7 @@ export function articlePage(
             <button class="btn btn-secondary" type="submit">Koppelen</button>
           </form>
         </section>
-        ${missing ? gapCard(missing, "Deze pagina verwijst ernaar, maar het artikel bestaat nog niet.", missing) : ""}
+        ${missing ? gapCard(missing, "Deze pagina verwijst ernaar, maar het artikel bestaat nog niet.", slugify(missing)) : ""}
         ${promoRow("article", dienst)}
         ${sponsorLine()}
       </div>
@@ -597,12 +614,12 @@ export function contributePage(values: ContributeValues, options: ContributeOpti
 export function accessPage(): string {
   return layout(
     {
-      title: "Agents",
+      title: "Voor AI",
       description: "Neem contact op voor een licentie om AI en agents te koppelen.",
       path: "/toegang",
     },
     `<section class="form-narrow">
-      <p class="eyebrow">Agents</p>
+      <p class="eyebrow">Koppeling</p>
       <h1>AI en agents koppelen</h1>
       <p class="lead">Wil je AI of agents koppelen aan deze wiki, zodat we samen betere informatie bouwen over Nederlandse uniforme diensten?</p>
       <p>Neem contact op voor een licentie.</p>
@@ -651,13 +668,13 @@ export function graphPage(payload: { nodes: unknown[]; edges: unknown[] }, focus
     <section>
       <p class="eyebrow">Wat bij elkaar hoort</p>
       <h1>KennisWeb</h1>
-      <p class="lead">Artikelen, diensten, tags en verwijzingen. Sleep, zoom of klik. Alleen relaties uit de teksten zelf. Onder elk artikel kun je zelf een koppeling leggen.</p>
+      <p class="lead">Artikelen, diensten, tags en verwijzingen. Sleep, zoom of klik. Onder een artikel kun je zelf een koppeling leggen.</p>
       <div class="chips">
         <a class="chip ${!focus ? "chip-lime" : ""}" href="/kennisweb">Alles</a>
         ${KOLOMMEN.map((kolom) => `<a class="chip" href="/dienst/${kolom.id}">${escapeHtml(kolom.label)}</a>`).join("")}
       </div>
       <div class="graph-legend"><span>Wit · artikel</span><span>Lime · tag</span><span>Ring · kolom</span><span>Grijs · categorie</span></div>
-      <p id="kennisweb-leeg" class="empty" hidden>Nog te weinig koppelingen. Koppel een artikel met @ onder een stuk.</p>
+      <p id="kennisweb-leeg" class="empty" hidden>Nog te weinig koppelingen. Leg onder een artikel een koppeling.</p>
       <div class="graph-wrap"><canvas id="kennisweb" width="1100" height="520" aria-label="KennisWeb"></canvas></div>
     </section>
     ${promoRow("graaf")}
@@ -703,6 +720,9 @@ export function dienstPage(kolom: PublicColumn, articles: ArticleRow[]): string 
       );
     })
     .join("");
+  const leftover = articles.filter(
+    (article) => !kolom.themes.some((theme) => articleMatchesTheme(article, theme)),
+  );
   return layout(
     {
       title: kolom.label,
@@ -722,6 +742,14 @@ export function dienstPage(kolom: PublicColumn, articles: ArticleRow[]): string 
         <p class="lead">${escapeHtml(kolom.summary)}</p>
       </section>
       ${serviceGrid(rows)}
+      ${
+        leftover.length
+          ? `<section class="mt-8">
+        <h2>Meer bij ${escapeHtml(kolom.label)}</h2>
+        <div class="article-list mt-4">${leftover.map(articleTeaser).join("")}</div>
+      </section>`
+          : ""
+      }
       <p class="chooser-back"><a href="/">Andere dienst</a></p>
     </div>
     ${sponsorLine()}`,
@@ -789,7 +817,7 @@ export function tagPage(tag: string, articles: ArticleRow[]): string {
 export function gapsPage(gaps: ReturnType<typeof findGaps>): string {
   const items = gaps
     .slice(0, 40)
-    .map((gap) => gapCard(`${gap.kolom}: ${gap.title}`, gap.summary, gap.slug))
+    .map((gap) => gapCard(gap.title, gap.summary, gap.slug, gap.kolom === "Overig" ? "" : gap.kolom))
     .join("");
   return layout(
     {

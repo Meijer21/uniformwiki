@@ -15,9 +15,9 @@ export const SEED_ARTICLES: Array<{
     summary: "Kennisbank voor en door mensen in uniform. Gehost door THISLINE.",
     body: `UniformWiki is de open kennisbank van THISLINE. Voor brandweer, ambulance, politie, defensie en handhaving. Mensen lezen de pagina’s. Agents halen dezelfde goedgekeurde tekst op via MCP.
 
-Je zoekt op [[kolom]], daarna op thema, daarna op het artikel. Hoe gerichter je klikt, hoe smaller de set. Dat is geen spel en geen medaille. Het is statische indeling.
+    Je kiest eerst een dienst, daarna een thema, daarna het artikel.
 
-Zie [[Hoe je bijdraagt]], [[Wat is een uniform?]] en [[Samenhang]]. Ontbreekt er iets, dan vraagt de wiki dat hardop.`,
+Zie [[Hoe je bijdraagt]], [[Wat is een uniform?]] en [[KennisWeb]]. Ontbreekt er iets, dan kun je het aanvullen.`,
     metadata: {
       licentie: "CC-BY-SA-4.0",
       trefwoorden: "uniformwiki, thisline, wiki",
@@ -34,12 +34,12 @@ THISLINE. (2026). Merkwaarheidsdocument v2.0.`,
     summary: "Stuur een artikel in zonder account. Bronnen en AI-herkomst zijn verplicht.",
     body: `Iedereen in uniform mag een artikel voorstellen. Geen Git, geen editor, geen inlog.
 
-1. Kies je [[kolom]]
+1. Kies je dienst
 2. Schrijf in gewone taal
 3. Zet bronnen eronder, één per regel
 4. Zeg of de tekst van een mens is, of (deels) met AI
 
-Koppel naar bestaande pagina’s met dubbele haken, zoals [[Wat is een uniform?]]. Bestaan ze nog niet, dan ziet de volgende bezoeker: hier ontbreekt nog iets, weet jij daar wat van.
+Koppel naar bestaande pagina’s met @ en de titel, zoals @[Wat is een uniform?]. Bestaan ze nog niet, dan kan de volgende bezoeker ze aanvullen.
 
 Persoonsgegevens (BSN, e-mail, telefoon) worden automatisch weggehaald.`,
     metadata: {
@@ -190,13 +190,13 @@ Rijksoverheid. (z.d.). Ambulancezorg. https://www.rijksoverheid.nl`,
   },
   {
     slug: "kennisgraaf",
-    title: "Samenhang",
+    title: "KennisWeb",
     category: "Over",
     dienst: "",
-    summary: "Artikelen, tags, kolommen en verwijzingen in één beeld. Wat bij elkaar hoort, staat bij elkaar.",
-    body: `Samenhang toont hoe pagina’s aan elkaar zitten: [[kolom]], tag, categorie en [[wikilink]]. Klik je dieper, dan blijft alleen wat bij dat thema hoort.
+    summary: "Artikelen, diensten, tags en verwijzingen in één beeld.",
+    body: `KennisWeb toont hoe pagina’s aan elkaar zitten: dienst, tag, categorie en verwijzing. Klik je dieper, dan blijft alleen wat bij dat thema hoort.
 
-Lege plekken zijn geen falen. Ze zijn het verzoek: weet jij daar wat van. Open [[Hoe je bijdraagt]] en vul het aan, met bron.`,
+Lege plekken zijn verzoeken om aanvulling. Open [[Hoe je bijdraagt]] en vul het aan, met bron.`,
     metadata: {
       licentie: "CC-BY-SA-4.0",
       trefwoorden: "samenhang, wikilink, tag",

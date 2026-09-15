@@ -13,7 +13,8 @@ export function escapeHtml(value: string): string {
 function wikiAnchor(target: string, label: string, resolveLink?: LinkResolver): string {
   const hit = resolveLink?.(target);
   if (hit) {
-    return `<a class="wikilink" href="/wiki/${encodeURIComponent(hit.slug)}">${escapeHtml(label)}</a>`;
+    const href = hit.href ?? `/wiki/${encodeURIComponent(hit.slug)}`;
+    return `<a class="wikilink" href="${escapeHtml(href)}">${escapeHtml(label)}</a>`;
   }
   return `<a class="wikilink is-missing" href="/bijdragen?slug=${encodeURIComponent(slugify(target))}&title=${encodeURIComponent(target)}&vast=1">${escapeHtml(label)}</a>`;
 }

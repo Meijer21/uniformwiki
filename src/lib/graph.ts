@@ -5,6 +5,7 @@ import {
   articleTags,
   buildLinkResolver,
   parseWikiLinks,
+  publicArticleTags,
   uniqueLabels,
 } from "./links.js";
 
@@ -116,12 +117,12 @@ export function buildGraph(articles: ArticleRow[]): GraphPayload {
         id: catId,
         type: "category",
         label: category,
-        href: `/?categorie=${encodeURIComponent(category)}`,
+        href: `/?q=${encodeURIComponent(category)}`,
       });
       addEdge(edges, seen, { source: articleNode, target: catId, type: "category" });
     }
 
-    for (const tag of uniqueLabels(articleTags(article))) {
+    for (const tag of uniqueLabels(publicArticleTags(article))) {
       const tagId = nodeId("tag", tag);
       addNode(nodes, {
         id: tagId,
@@ -165,12 +166,13 @@ export function buildGraph(articles: ArticleRow[]): GraphPayload {
   }
 
   void byId;
-  return { nodes: [...nodes.values()], edges };
+  const ids = new Set([...nodes.keys()]);
+  return { nodes: [...nodes.values()], edges: edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target)) };
 }
 
 export function neighborhood(article: ArticleRow, articles: ArticleRow[]): ArticleNeighborhood {
   const resolve = buildLinkResolver(articles);
-  const tags = uniqueLabels(articleTags(article));
+  const tags = uniqueLabels(publicArticleTags(article));
   const diensten = articleDiensten(article);
   const outgoing: Array<{ slug: string; title: string }> = [];
   const missing: string[] = [];
@@ -218,7 +220,7 @@ export function neighborhood(article: ArticleRow, articles: ArticleRow[]): Artic
         bump(other, "Wikilink", WEIGHT.wikilink);
       }
     }
-    const sharedTags = uniqueLabels(articleTags(other)).filter((tag) =>
+    const sharedTags = uniqueLabels(publicArticleTags(other)).filter((tag) =>
       tags.some((mine) => mine.toLowerCase() === tag.toLowerCase()),
     );
     if (sharedTags.length) {

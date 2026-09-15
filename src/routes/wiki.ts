@@ -176,6 +176,11 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
+  app.get("/wiki/:id/koppel", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    return reply.redirect(`/wiki/${encodeURIComponent(id)}`, 303);
+  });
+
   app.post("/wiki/:id/koppel", async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
@@ -222,10 +227,15 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
       const query = request.query as Record<string, string>;
       const slug = (query.slug ?? "").trim();
       const title = (query.title ?? "").trim();
-      const modus = query.modus === "aanpassen" || query.modus === "aanvullen" ? query.modus : slug ? "aanpassen" : "nieuw";
       const existing = slug ? await getArticleByAny(slug) : undefined;
+      const modus =
+        query.modus === "aanpassen" || query.modus === "aanvullen"
+          ? query.modus
+          : existing
+            ? "aanpassen"
+            : "nieuw";
       const meta = existing ? parseStoredMetadata(existing.metadata) : {};
-      const locked = query.vast === "1" || Boolean(existing) || Boolean(title && slug);
+      const locked = query.vast === "1" || Boolean(existing);
       let body = existing?.body;
       if (modus === "aanvullen" && existing?.body) {
         body = `${existing.body.trim()}\n\n`;
@@ -407,8 +417,9 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
   app.get("/tag/:tag", async (request, reply) => {
     try {
       const { tag } = request.params as { tag: string };
-      const articles = filterArticles(await listApprovedArticles(), { tag });
-      return html(reply, 200, tagPage(tag.replace(/-/g, " "), articles));
+      const decoded = decodeURIComponent(tag).replace(/\+/g, " ").trim();
+      const articles = filterArticles(await listApprovedArticles(), { tag: decoded });
+      return html(reply, 200, tagPage(decoded.replace(/-/g, " "), articles));
     } catch (error) {
       request.log.error({ err: error }, "Tagpagina mislukt");
       return html(reply, 500, errorPage("Deze tag kon niet worden getoond."));

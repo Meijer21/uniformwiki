@@ -112,22 +112,18 @@ async function seedArticles(): Promise<void> {
   for (const article of SEED_ARTICLES) {
     const existing = await dbGet<ArticleRow>("SELECT * FROM articles WHERE slug = ?", [article.slug]);
     if (existing) {
-      const needsOfficial =
-        existing.status !== "approved" || !existing.body.includes("[[") || !parseStoredMetadata(existing.metadata).bronnen;
-      if (needsOfficial) {
-        await dbRun(
-          `UPDATE articles SET title = ?, category = ?, dienst = ?, summary = ?, body = ?, metadata = ?, status = 'approved', updated_at = datetime('now') WHERE id = ?`,
-          [
-            article.title,
-            article.category,
-            article.dienst,
-            article.summary,
-            article.body,
-            metadataToJson(article.metadata),
-            existing.id,
-          ],
-        );
-      }
+      await dbRun(
+        `UPDATE articles SET title = ?, category = ?, dienst = ?, summary = ?, body = ?, metadata = ?, status = 'approved', updated_at = datetime('now') WHERE id = ?`,
+        [
+          article.title,
+          article.category,
+          article.dienst,
+          article.summary,
+          article.body,
+          metadataToJson(article.metadata),
+          existing.id,
+        ],
+      );
       continue;
     }
     const created = await dbRun(
