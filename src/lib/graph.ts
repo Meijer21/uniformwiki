@@ -28,6 +28,7 @@ export interface GraphEdge {
 export interface GraphPayload {
   nodes: GraphNode[];
   edges: GraphEdge[];
+  focus?: string;
 }
 
 export interface RelatedArticle {
@@ -168,6 +169,24 @@ export function buildGraph(articles: ArticleRow[]): GraphPayload {
   void byId;
   const ids = new Set([...nodes.keys()]);
   return { nodes: [...nodes.values()], edges: edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target)) };
+}
+
+export function focusGraph(graph: GraphPayload, slug: string): GraphPayload {
+  const focusId = nodeId("article", slug);
+  const keep = new Set<string>([focusId]);
+  for (const edge of graph.edges) {
+    if (edge.source === focusId) {
+      keep.add(edge.target);
+    }
+    if (edge.target === focusId) {
+      keep.add(edge.source);
+    }
+  }
+  return {
+    nodes: graph.nodes.filter((node) => keep.has(node.id)),
+    edges: graph.edges.filter((edge) => keep.has(edge.source) && keep.has(edge.target)),
+    focus: slug,
+  };
 }
 
 export function neighborhood(article: ArticleRow, articles: ArticleRow[]): ArticleNeighborhood {

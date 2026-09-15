@@ -13,7 +13,7 @@ import {
 import { citationsFromFields, parseCitations } from "../lib/citations.js";
 import { listPublicColumns, resolveColumn } from "../lib/columns.js";
 import { articleMatchesTheme, findGaps } from "../lib/gaps.js";
-import { buildGraph, filterArticles, neighborhood } from "../lib/graph.js";
+import { buildGraph, filterArticles, focusGraph, neighborhood } from "../lib/graph.js";
 import { listApiKeys } from "../lib/keys.js";
 import { articleDiensten, articleTags, uniqueLabels } from "../lib/links.js";
 import { parseStoredMetadata } from "../lib/metadata.js";
@@ -88,6 +88,20 @@ function readSources(body: unknown): string {
   return (hidden.trim() || fromFields).trim();
 }
 
+function botBlocked(body: unknown): string | undefined {
+  if (readString(body, "website").trim()) {
+    return "Je bijdrage kon niet worden geplaatst.";
+  }
+  if (readString(body, "js_ok") !== "1") {
+    return "Zet JavaScript aan om een artikel in te sturen. Dat houdt automatische spam tegen.";
+  }
+  const started = Number(readString(body, "form_t"));
+  if (!Number.isFinite(started) || Date.now() - started < 1200) {
+    return "Wacht even en stuur daarna opnieuw in.";
+  }
+  return undefined;
+}
+
 function requireAdminPage(request: FastifyRequest, reply: FastifyReply): boolean {
   if (isAdminSession(request.headers.cookie)) {
     return true;
@@ -113,7 +127,7 @@ async function contributeOptions(): Promise<ContributeOptions> {
         if (dienstLabels.some((dienst) => dienst.toLowerCase() === key)) {
           return false;
         }
-        return !["wiki", "tag", "graaf", "thisline", "uniformwiki", "bijdragen", "wikilink", "ai"].includes(key);
+        return !["wiki", "tag", "graaf", "thisline", "uniformwiki", "bijdragen", "wikilink", "ai", "samenhang", "kennisweb"].includes(key);
       }),
     diensten: dienstLabels.length ? dienstLabels : KOLOMMEN.map((item) => item.label),
     mentions: articles.map((article) => ({
@@ -164,11 +178,18 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
       }
       const [revisions, articles] = await Promise.all([listRevisions(article.id), listApprovedArticles()]);
       const query = request.query as Record<string, string>;
-      const notice = query.ok === "koppel" ? "De koppeling wacht op keuring." : query.ok === "bijdrage" ? "Je wijziging wacht op keuring." : undefined;
+      const notice = query.ok === "bijdrage" ? "Je wijziging wacht op keuring." : undefined;
       return html(
         reply,
         200,
-        articlePage(article, revisions, neighborhood(article, articles), articles, buildGraph(articles), notice),
+        articlePage(
+          article,
+          revisions,
+          neighborhood(article, articles),
+          articles,
+          focusGraph(buildGraph(articles), article.slug),
+          notice,
+        ),
       );
     } catch (error) {
       request.log.error({ err: error }, "Artikelweergave mislukt");
@@ -182,44 +203,8 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/wiki/:id/koppel", async (request, reply) => {
-    try {
-      const { id } = request.params as { id: string };
-      const article = await getApprovedArticle(id);
-      const targetSlug = readString(request.body, "target");
-      const target = targetSlug ? await getApprovedArticle(targetSlug) : undefined;
-      if (!article || !target) {
-        return html(reply, 404, notFoundPage("Dit artikel of de koppeling bestaat niet."));
-      }
-      if (article.slug === target.slug) {
-        return html(reply, 400, errorPage("Je kunt een artikel niet aan zichzelf koppelen."));
-      }
-      const mention = `@[${target.title}]`;
-      const already = article.body.includes(mention) || article.body.includes(`[[${target.title}]]`);
-      if (already) {
-        return reply.redirect(`/wiki/${encodeURIComponent(article.slug)}`, 303);
-      }
-      const meta = parseStoredMetadata(article.metadata);
-      await writeArticle(
-        {
-          title: article.title,
-          category: article.category,
-          summary: article.summary,
-          body: `${article.body.trim()}\n\n${mention}`,
-          slug: article.slug,
-          contributorName: "koppeling",
-          contributorNote: `Koppeling naar ${target.title}`,
-          dienst: article.dienst,
-          tags: articleTags(article).join(", "),
-          bronnen: meta.bronnen ?? "",
-          aiOrigin: meta.ai ?? "mens",
-        },
-        false,
-      );
-      return reply.redirect(`/wiki/${encodeURIComponent(article.slug)}?ok=koppel`, 303);
-    } catch (error) {
-      request.log.error({ err: error }, "Koppelen mislukt");
-      return html(reply, 500, errorPage("De koppeling kon niet worden opgeslagen."));
-    }
+    const { id } = request.params as { id: string };
+    return reply.redirect(`/wiki/${encodeURIComponent(id)}`, 303);
   });
 
   app.get("/bijdragen", async (request, reply) => {
@@ -228,25 +213,16 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
       const slug = (query.slug ?? "").trim();
       const title = (query.title ?? "").trim();
       const existing = slug ? await getArticleByAny(slug) : undefined;
-      const modus =
-        query.modus === "aanpassen" || query.modus === "aanvullen"
-          ? query.modus
-          : existing
-            ? "aanpassen"
-            : "nieuw";
+      const modus = existing ? "aanpassen" : "nieuw";
       const meta = existing ? parseStoredMetadata(existing.metadata) : {};
       const locked = query.vast === "1" || Boolean(existing);
-      let body = existing?.body;
-      if (modus === "aanvullen" && existing?.body) {
-        body = `${existing.body.trim()}\n\n`;
-      }
       return contributeView(reply, 200, {
         slug: existing?.slug || slug,
         title: existing?.title || title,
         category: existing?.category,
         dienst: existing ? articleDiensten(existing)[0] ?? query.dienst ?? "" : query.dienst ?? "",
         summary: existing?.summary,
-        body,
+        body: existing?.body,
         tags: existing ? articleTags(existing).join(", ") : "",
         bronnen: meta.bronnen,
         aiOrigin: meta.ai,
@@ -295,6 +271,10 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
       modus: readString(body, "modus") === "aanpassen" ? "aanpassen" : vast ? "aanvullen" : "nieuw",
     };
     try {
+      const blocked = botBlocked(body);
+      if (blocked) {
+        return contributeView(reply, 400, { ...values, error: blocked });
+      }
       if (vast && slug) {
         const existing = await getArticleByAny(slug);
         if (existing) {

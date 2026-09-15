@@ -44,7 +44,17 @@ const NOISE_TAGS = new Set([
 ]);
 
 export function publicArticleTags(article: ArticleRow): string[] {
-  return articleTags(article).filter((tag) => !NOISE_TAGS.has(tag.toLowerCase()));
+  const diensten = new Set(articleDiensten(article).map((item) => item.toLowerCase()));
+  for (const dienst of DIENSTEN) {
+    diensten.add(dienst.toLowerCase());
+  }
+  return articleTags(article).filter((tag) => {
+    const key = tag.toLowerCase();
+    if (NOISE_TAGS.has(key) || diensten.has(key)) {
+      return false;
+    }
+    return true;
+  });
 }
 
 export type LinkResolver = (target: string) => ResolvedLink | undefined;

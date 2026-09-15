@@ -116,7 +116,7 @@ export async function seedVocab(articles: ArticleRow[]): Promise<void> {
   for (const kolom of KOLOMMEN) {
     await approveVocabLabel("dienst", kolom.label);
   }
-  const categories = new Set<string>(["Over", "Begrippen", "Normen", "Uitrusting"]);
+  const categories = new Set<string>(["Over", "Begrippen", "Normen", "Uitrusting", "Inzet", "Procedure", "Methode"]);
   const tags = new Set<string>();
   for (const article of articles) {
     if (article.category) {

@@ -1,9 +1,11 @@
 import { config } from "../config.js";
 import { aiLabel, parseCitations, sourceBlock, type Citation } from "../lib/citations.js";
 import { CSS_FILE, scriptUrl } from "../lib/assets.js";
+import { CONTRIBUTE_JS } from "../assets/contribute-js.js";
+import { GRAPH_JS } from "../assets/graph-js.js";
 import { THISLINE_CSS } from "../assets/thisline-css.js";
 import { articleMatchesTheme, findGaps } from "../lib/gaps.js";
-import type { ArticleNeighborhood, GraphPayload, RelatedArticle } from "../lib/graph.js";
+import type { ArticleNeighborhood, GraphPayload } from "../lib/graph.js";
 import { articleDiensten, buildLinkResolver } from "../lib/links.js";
 import { escapeHtml, renderMarkdown } from "../lib/markdown.js";
 import { parseStoredMetadata } from "../lib/metadata.js";
@@ -121,6 +123,18 @@ function crumbs(items: Array<{ href?: string; label: string }>): string {
     .join("")}</ol></nav>`;
 }
 
+function pageScripts(scripts?: string[]): string {
+  return (scripts ?? [])
+    .map((src) => {
+      const body = src.includes("contribute") ? CONTRIBUTE_JS : src.includes("graph") ? GRAPH_JS : "";
+      if (body) {
+        return `<script>${body.replace(/<\/script/gi, "<\\/script")}</script>`;
+      }
+      return `<script src="${escapeHtml(scriptUrl(src))}" defer></script>`;
+    })
+    .join("\n");
+}
+
 function inlineCss(): string {
   return THISLINE_CSS.replace(/<\/style/gi, "<\\/style");
 }
@@ -172,9 +186,7 @@ export function layout(options: PageOptions, content: string): string {
     options.title === config.siteName ? config.siteName : `${options.title} · ${config.siteName}`;
   const jsonLd = options.jsonLd ? JSON.stringify(options.jsonLd) : "";
   const noindex = options.path.startsWith("/beheer") || options.path === "/fout";
-  const scripts = (options.scripts ?? [])
-    .map((src) => `<script src="${escapeHtml(scriptUrl(src))}" defer></script>`)
-    .join("\n");
+  const scripts = pageScripts(options.scripts);
   const jsonBlock = options.jsonBlock
     ? `<script type="application/json" id="${escapeHtml(options.jsonBlock.id)}">${options.jsonBlock.json.replace(/</g, "\\u003c")}</script>`
     : "";
@@ -206,7 +218,6 @@ export function layout(options: PageOptions, content: string): string {
     <link rel="stylesheet" href="${escapeHtml(CSS_FILE)}" />
     ${jsonLd ? `<script type="application/ld+json">${jsonLd}</script>` : ""}
     ${jsonBlock}
-    ${scripts}
   </head>
   <body>
     <a class="skip" href="#inhoud">Naar inhoud</a>
@@ -220,7 +231,6 @@ export function layout(options: PageOptions, content: string): string {
           ${navLink("/", "Start", options.path)}
           ${navLink("/bijdragen", "Nieuw artikel", options.path)}
           ${navLink("/kennisweb", "KennisWeb", options.path)}
-          ${navLink("/aanvullen", "Aanvullen", options.path)}
         </nav>
         <form class="header-search" method="get" action="/" role="search">
           <label class="skip" for="q-top">Zoeken</label>
@@ -235,7 +245,7 @@ export function layout(options: PageOptions, content: string): string {
     </main>
     <footer class="site-footer">
       <div class="shell site-footer-inner">
-        <p>Kennis over kleding en uitrusting in de kolommen. Gehost door THISLINE.</p>
+        <p>Kennis voor mensen in uniform. Gehost door THISLINE.</p>
         <nav>
           <a href="/privacy">Privacy</a>
           <a href="/aanvullen">Aanvullen</a>
@@ -245,6 +255,7 @@ export function layout(options: PageOptions, content: string): string {
         </nav>
       </div>
     </footer>
+    ${scripts}
   </body>
 </html>`;
 }
@@ -337,17 +348,11 @@ export function articlePage(
   const sources = sourceBlock(metadata.bronnen, metadata.ai);
   const resolve = buildLinkResolver(allArticles);
   const tags = neighborhood.tags
+    .filter((tag) => !neighborhood.diensten.some((dienst) => dienst.toLowerCase() === tag.toLowerCase()))
     .map((tag) => `<a class="chip" href="/tag/${encodeURIComponent(slugify(tag))}">${escapeHtml(tag)}</a>`)
     .join("");
   const diensten = neighborhood.diensten
     .map((dienst) => `<a class="chip" href="/dienst/${encodeURIComponent(slugify(dienst))}">${escapeHtml(dienst)}</a>`)
-    .join("");
-  const related = neighborhood.related
-    .map(
-      (item: RelatedArticle) => `<li>
-        <a href="/wiki/${encodeURIComponent(item.slug)}">${escapeHtml(item.title)}</a>
-      </li>`,
-    )
     .join("");
   const backlinks = neighborhood.backlinks
     .map((item) => `<li><a href="/wiki/${encodeURIComponent(item.slug)}">${escapeHtml(item.title)}</a></li>`)
@@ -364,10 +369,6 @@ export function articlePage(
     .join("");
   const missing = neighborhood.missing[0];
   const dienst = neighborhood.diensten[0] ?? "";
-  const koppelOptions = allArticles
-    .filter((item) => item.slug !== article.slug)
-    .map((item) => `<option value="${escapeHtml(item.slug)}">${escapeHtml(item.title)}</option>`)
-    .join("");
 
   return layout(
     {
@@ -388,7 +389,6 @@ export function articlePage(
         <p class="lead">${escapeHtml(article.summary)}</p>
         <div class="article-actions">
           <a class="btn btn-primary btn-sm" href="/bijdragen?slug=${encodeURIComponent(article.slug)}&modus=aanpassen&vast=1">Aanpassen</a>
-          <a class="btn btn-secondary btn-sm" href="/bijdragen?slug=${encodeURIComponent(article.slug)}&modus=aanvullen&vast=1">Aanvullen</a>
         </div>
         <div class="chips">${diensten}${tags}</div>
         <div class="prose mt-6">${renderMarkdown(article.body, resolve)}</div>
@@ -402,32 +402,16 @@ export function articlePage(
           <p class="ai-note ${sources.missingAi ? "is-missing" : ""}">${escapeHtml(aiLabel(sources.ai))}</p>
         </section>
         <section class="kennisweb-block">
-          <details>
-            <summary>Samenhang bekijken</summary>
-            <p class="hint mt-3">Koppel zelf een artikel. De koppeling gaat eerst langs keuring.</p>
-            <p id="kennisweb-leeg" class="empty" hidden>Nog te weinig koppelingen voor dit stuk.</p>
-            <div class="graph-wrap graph-wrap-article"><canvas id="kennisweb" width="1100" height="360" aria-label="Samenhang"></canvas></div>
-          </details>
-          <form method="post" action="/wiki/${encodeURIComponent(article.slug)}/koppel" class="koppel-form">
-            <label class="field" style="flex:1">
-              <span class="field-label">Koppel een artikel</span>
-              <select class="input" name="target" required>
-                <option value="">Kies een artikel</option>
-                ${koppelOptions}
-              </select>
-            </label>
-            <button class="btn btn-secondary" type="submit">Koppelen</button>
-          </form>
+          <h2>KennisWeb</h2>
+          <p class="hint">Dit artikel in het midden. Koppelingen komen uit links en tags in de tekst.</p>
+          <p id="kennisweb-leeg" class="empty" hidden>Nog te weinig koppelingen voor dit stuk.</p>
+          <div class="graph-wrap graph-wrap-article"><canvas id="kennisweb" width="1100" height="420" aria-label="KennisWeb"></canvas></div>
         </section>
         ${missing ? gapCard(missing, "Deze pagina verwijst ernaar, maar het artikel bestaat nog niet.", slugify(missing)) : ""}
         ${promoRow("article", dienst)}
         ${sponsorLine()}
       </div>
       <aside class="stack wiki-side">
-        <section>
-          <h2 class="h3">Hoort bij</h2>
-          <ul class="rel-list">${related || `<li class="meta">Nog geen gerichte buren.</li>`}</ul>
-        </section>
         ${
           backlinks
             ? `<section>
@@ -507,12 +491,11 @@ export function contributePage(values: ContributeValues, options: ContributeOpti
     .join("");
   const dienstNewOpen = Boolean(values.dienst && !knownDienst);
   const categoryNewOpen = Boolean(values.category && !knownCategory);
-  const heading =
-    values.modus === "aanpassen" ? "Artikel aanpassen" : values.locked ? "Artikel aanvullen" : "Nieuw artikel";
+  const heading = values.locked ? "Artikel aanpassen" : "Nieuw artikel";
 
   return layout(
     {
-      title: values.locked ? (values.modus === "aanpassen" ? "Aanpassen" : "Aanvullen") : "Nieuw artikel",
+      title: values.locked ? "Aanpassen" : "Nieuw artikel",
       description: "Stuur een artikel in. Bronnen en AI-herkomst zijn verplicht.",
       path: "/bijdragen",
       scripts: ["/assets/contribute.js"],
@@ -522,7 +505,7 @@ export function contributePage(values: ContributeValues, options: ContributeOpti
     <section class="form-narrow stack">
       <h1>${heading}</h1>
       <p class="lead">Geen account nodig. Een beheerder leest je tekst na voordat die live gaat. Vermeld bronnen en of er AI is gebruikt.</p>
-      ${values.locked ? `<p class="lock-note">De titel ligt vast. Je wijzigt of vult dit onderwerp aan, niet een ander.</p>` : ""}
+      ${values.locked ? `<p class="lock-note">De titel ligt vast. Je stuurt een update in ter beoordeling.</p>` : ""}
       ${values.notice ? `<p class="ok">${escapeHtml(values.notice)}</p>` : ""}
       ${values.error ? `<p class="error">${escapeHtml(values.error)}</p>` : ""}
       <form method="post" action="/bijdragen" class="stack" id="schrijf-form" data-vast="${locked ? "1" : "0"}">
@@ -531,12 +514,17 @@ export function contributePage(values: ContributeValues, options: ContributeOpti
         <input type="hidden" name="modus" value="${escapeHtml(values.modus ?? "nieuw")}" />
         <input type="hidden" name="tags" id="tags" value="${escapeHtml(values.tags ?? "")}" />
         <input type="hidden" name="bronnen" id="bronnen" value="${escapeHtml(values.bronnen ?? "")}" />
+        <input type="hidden" name="js_ok" id="js_ok" value="0" />
+        <input type="hidden" name="form_t" id="form_t" value="" />
+        <div class="hp-field" aria-hidden="true">
+          <label>Website<input type="text" name="website" tabindex="-1" autocomplete="off" /></label>
+        </div>
         <label class="field"><span class="field-label">Titel</span>
           <input class="input" name="title" id="title" required maxlength="180" value="${escapeHtml(values.title ?? "")}" ${locked ? "readonly" : ""} />
         </label>
         <div class="field field-switch">
           <label class="field-label" for="dienst">Dienst</label>
-          <select class="input" name="dienst" id="dienst" required>${diensten}</select>
+          <select class="input" name="dienst" id="dienst" required onchange="var w=document.getElementById('dienst-new-wrap'); if(w){ var o=this.value==='__nieuw__'; w.hidden=!o; w.classList.toggle('is-open', o);}">${diensten}</select>
           <div class="when-new" id="dienst-new-wrap"${dienstNewOpen ? "" : " hidden"}>
             <label class="field-label" for="dienst_new">Naam van de nieuwe dienst</label>
             <input class="input" name="dienst_new" id="dienst_new" maxlength="80" value="${escapeHtml(values.dienstNew ?? (!knownDienst ? (values.dienst ?? "") : ""))}" placeholder="Bijvoorbeeld Kustwacht" />
@@ -545,7 +533,7 @@ export function contributePage(values: ContributeValues, options: ContributeOpti
         </div>
         <div class="field field-switch">
           <label class="field-label" for="category">Categorie</label>
-          <select class="input" name="category" id="category" required>${categoryOptions}</select>
+          <select class="input" name="category" id="category" required onchange="var w=document.getElementById('category-new-wrap'); if(w){ var o=this.value==='__nieuw__'; w.hidden=!o; w.classList.toggle('is-open', o);}">${categoryOptions}</select>
           <div class="when-new" id="category-new-wrap"${categoryNewOpen ? "" : " hidden"}>
             <label class="field-label" for="category_new">Naam van de nieuwe categorie</label>
             <input class="input" name="category_new" id="category_new" maxlength="80" value="${escapeHtml(values.categoryNew ?? (!knownCategory ? (values.category ?? "") : ""))}" placeholder="Bijvoorbeeld Uitrusting" />
@@ -569,9 +557,10 @@ export function contributePage(values: ContributeValues, options: ContributeOpti
             <button class="btn btn-ghost btn-sm" type="button" id="fmt-ol">Nummers</button>
             <button class="btn btn-ghost btn-sm" type="button" id="fmt-at">Koppel artikel</button>
           </div>
-          <textarea class="textarea" name="body" id="body" required rows="14">${escapeHtml(values.body ?? "")}</textarea>
+          <div class="wiki-editor" id="body-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Tekst"></div>
+          <textarea class="body-sync" name="body" id="body" required rows="14">${escapeHtml(values.body ?? "")}</textarea>
           <div class="mention-menu" id="mention-menu" hidden></div>
-          <span class="hint">Plakken mag. We houden platte tekst, lijsten en interne koppelingen. Typ @ om een bestaand artikel te koppelen.</span>
+          <span class="hint">Typ gewoon. Lijst en nummers staan in de balk. Typ @ en de naam van een artikel om te koppelen.</span>
         </div>
         <div class="field">
           <span class="field-label">Bronnen</span>
@@ -605,7 +594,7 @@ export function contributePage(values: ContributeValues, options: ContributeOpti
         </fieldset>
         <label class="field"><span class="field-label">Jouw naam of initialen (optioneel)</span><input class="input" name="contributor_name" value="${escapeHtml(values.name ?? "")}" /></label>
         <label class="field"><span class="field-label">Toelichting voor de beheerder</span><input class="input" name="contributor_note" value="${escapeHtml(values.note ?? "")}" /></label>
-        <button class="btn btn-primary" type="submit">Insturen</button>
+        <button class="btn btn-primary" type="submit">Ter beoordeling sturen</button>
       </form>
     </section>`,
   );
@@ -668,13 +657,13 @@ export function graphPage(payload: { nodes: unknown[]; edges: unknown[] }, focus
     <section>
       <p class="eyebrow">Wat bij elkaar hoort</p>
       <h1>KennisWeb</h1>
-      <p class="lead">Artikelen, diensten, tags en verwijzingen. Sleep, zoom of klik. Onder een artikel kun je zelf een koppeling leggen.</p>
+      <p class="lead">Artikelen, diensten, tags en verwijzingen. Sleep, zoom of klik. Koppelingen ontstaan via @ in de tekst en via tags.</p>
       <div class="chips">
         <a class="chip ${!focus ? "chip-lime" : ""}" href="/kennisweb">Alles</a>
         ${KOLOMMEN.map((kolom) => `<a class="chip" href="/dienst/${kolom.id}">${escapeHtml(kolom.label)}</a>`).join("")}
       </div>
       <div class="graph-legend"><span>Wit · artikel</span><span>Lime · tag</span><span>Ring · kolom</span><span>Grijs · categorie</span></div>
-      <p id="kennisweb-leeg" class="empty" hidden>Nog te weinig koppelingen. Leg onder een artikel een koppeling.</p>
+      <p id="kennisweb-leeg" class="empty" hidden>Nog te weinig koppelingen. Typ @ in een artikel om te koppelen.</p>
       <div class="graph-wrap"><canvas id="kennisweb" width="1100" height="520" aria-label="KennisWeb"></canvas></div>
     </section>
     ${promoRow("graaf")}

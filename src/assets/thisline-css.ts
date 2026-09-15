@@ -452,14 +452,62 @@ details summary { cursor: pointer; font-weight: 600; color: var(--focus); }
   border-radius: var(--radius);
   overflow: hidden;
 }
-.graph-wrap-article { min-height: 280px; }
+.graph-wrap-article { min-height: 380px; }
 #kennisweb { display: block; width: 100%; height: 520px; touch-action: none; cursor: grab; }
-.graph-wrap-article #kennisweb { height: 280px; }
+.graph-wrap-article #kennisweb { height: 380px; }
 .graph-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 12px; color: var(--muted); }
 .koppel-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-top: 12px; }
 .bron-row { display: grid; gap: 12px; }
 @media (min-width: 640px) { .bron-row { grid-template-columns: 1fr 1fr; } }
 .editor-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.wiki-editor {
+  min-height: 280px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.55;
+  overflow: auto;
+}
+.wiki-editor:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.wiki-editor:empty:before {
+  content: "Schrijf in gewone taal. Typ @ om een artikel te koppelen.";
+  color: var(--faint);
+}
+.wiki-editor ul, .wiki-editor ol { margin: 0.4em 0; padding-left: 1.4em; }
+.wiki-editor p { margin: 0 0 0.7em; }
+.wiki-editor .mention {
+  display: inline;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: #e6f4ea;
+  color: var(--primary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.body-sync {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.hp-field {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
 .rel-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
 .rel-list a { color: var(--ink); }
 .wiki-side .card { padding: 12px; }
@@ -589,6 +637,7 @@ fieldset.choice-set {
   max-height: 240px;
   overflow: auto;
 }
+.mention-menu[hidden] { display: none !important; }
 .mention-item {
   display: flex;
   justify-content: space-between;

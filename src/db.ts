@@ -6,6 +6,7 @@ import { keyPrefix } from "./lib/crypto.js";
 import { mergeTagLists } from "./lib/links.js";
 import { metadataToJson, parseStoredMetadata } from "./lib/metadata.js";
 import { SEED_ARTICLES } from "./lib/seed.js";
+import { ZETTEL_ARTICLES } from "./lib/zettelkasten.js";
 import { seedVocab } from "./lib/vocab.js";
 import type { ApiKeyRow, ArticleRow, RevisionRow } from "./types.js";
 
@@ -108,6 +109,40 @@ async function migrateArticles(): Promise<void> {
   }
 }
 
+async function insertApprovedArticle(article: (typeof SEED_ARTICLES)[number]): Promise<void> {
+  const created = await dbRun(
+    `INSERT INTO articles (slug, title, category, dienst, summary, body, metadata, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'approved')`,
+    [
+      article.slug,
+      article.title,
+      article.category,
+      article.dienst,
+      article.summary,
+      article.body,
+      metadataToJson(article.metadata),
+    ],
+  );
+  const revision = await dbRun(
+    `INSERT INTO article_revisions (
+       article_id, title, summary, body, metadata, category,
+       contributor_name, contributor_note, status
+     ) VALUES (?, ?, ?, ?, ?, ?, 'UniformWiki', 'Eerste versie', 'approved')`,
+    [
+      created.lastID,
+      article.title,
+      article.summary,
+      article.body,
+      metadataToJson(article.metadata),
+      article.category,
+    ],
+  );
+  await dbRun("UPDATE articles SET active_revision_id = ?, updated_at = datetime('now') WHERE id = ?", [
+    revision.lastID,
+    created.lastID,
+  ]);
+}
+
 async function seedArticles(): Promise<void> {
   for (const article of SEED_ARTICLES) {
     const existing = await dbGet<ArticleRow>("SELECT * FROM articles WHERE slug = ?", [article.slug]);
@@ -126,37 +161,17 @@ async function seedArticles(): Promise<void> {
       );
       continue;
     }
-    const created = await dbRun(
-      `INSERT INTO articles (slug, title, category, dienst, summary, body, metadata, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'approved')`,
-      [
-        article.slug,
-        article.title,
-        article.category,
-        article.dienst,
-        article.summary,
-        article.body,
-        metadataToJson(article.metadata),
-      ],
-    );
-    const revision = await dbRun(
-      `INSERT INTO article_revisions (
-         article_id, title, summary, body, metadata, category,
-         contributor_name, contributor_note, status
-       ) VALUES (?, ?, ?, ?, ?, ?, 'UniformWiki', 'Eerste versie', 'approved')`,
-      [
-        created.lastID,
-        article.title,
-        article.summary,
-        article.body,
-        metadataToJson(article.metadata),
-        article.category,
-      ],
-    );
-    await dbRun("UPDATE articles SET active_revision_id = ?, updated_at = datetime('now') WHERE id = ?", [
-      revision.lastID,
-      created.lastID,
-    ]);
+    await insertApprovedArticle(article);
+  }
+}
+
+async function seedZettel(): Promise<void> {
+  for (const article of ZETTEL_ARTICLES) {
+    const existing = await dbGet<ArticleRow>("SELECT * FROM articles WHERE slug = ?", [article.slug]);
+    if (existing) {
+      continue;
+    }
+    await insertApprovedArticle(article);
   }
 }
 
@@ -245,6 +260,7 @@ export async function initDb(): Promise<void> {
   await exec("CREATE INDEX IF NOT EXISTS idx_articles_dienst ON articles(dienst)");
   await seedAdminKey();
   await seedArticles();
+  await seedZettel();
   const allArticles = await dbAll<ArticleRow>("SELECT * FROM articles");
   await seedVocab(allArticles);
 }

@@ -1,5 +1,5 @@
 /** Versie in de bestandsnaam. Bunny negeert querystrings op CSS. */
-export const ASSET_VERSION = "20260915g";
+export const ASSET_VERSION = "20260915h";
 
 export const CSS_FILE = `/assets/wiki-${ASSET_VERSION}.css`;
 export const CONTRIBUTE_JS_FILE = `/assets/contribute-${ASSET_VERSION}.js`;

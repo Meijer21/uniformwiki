@@ -13,7 +13,7 @@ export const GRAPH_JS = `(function () {
   }
 
   var params = new URLSearchParams(location.search);
-  var focus = params.get("focus") || "";
+  var focus = data.focus || params.get("focus") || "";
   var filterType = params.get("type") || "all";
   var ctx = canvas.getContext("2d");
   var dpr = Math.max(1, window.devicePixelRatio || 1);
@@ -95,9 +95,17 @@ export const GRAPH_JS = `(function () {
       b.vx -= (dx / dist) * f;
       b.vy -= (dy / dist) * f;
     }
+    var fiStep = focus ? "article:" + focus : "";
     for (i = 0; i < nodes.length; i++) {
       a = nodes[i];
       if (drag && drag.id === a.id) continue;
+      if (fiStep && a.id === fiStep) {
+        a.vx = 0;
+        a.vy = 0;
+        a.x += (0 - a.x) * 0.12;
+        a.y += (0 - a.y) * 0.12;
+        continue;
+      }
       a.vx = (a.vx - a.x * 0.002) * 0.86;
       a.vy = (a.vy - a.y * 0.002) * 0.86;
       a.x += a.vx;

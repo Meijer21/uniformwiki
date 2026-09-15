@@ -39,7 +39,7 @@ THISLINE. (2026). Merkwaarheidsdocument v2.0.`,
 3. Zet bronnen eronder, één per regel
 4. Zeg of de tekst van een mens is, of (deels) met AI
 
-Koppel naar bestaande pagina’s met @ en de titel, zoals @[Wat is een uniform?]. Bestaan ze nog niet, dan kan de volgende bezoeker ze aanvullen.
+Koppel naar bestaande pagina’s met @ en de titel, zoals @[Wat is een uniform?]. Terwijl je typt verschijnen bestaande artikelen. Een beheerder keurt de update.
 
 Persoonsgegevens (BSN, e-mail, telefoon) worden automatisch weggehaald.`,
     metadata: {
@@ -101,9 +101,9 @@ Inspectie SZW. (z.d.). Persoonlijke beschermingsmiddelen. https://www.nlarbeidsi
     summary: "De set waarin je uitrukt: lagen, normen en wat er níet bij hoort op het terrein.",
     body: `Uitrukkleding is de voorgeschreven set van de brandweer voor inzet. Geen kazernekleding, geen sportshirt, geen eigen jas.
 
-De jas en broek beschermen tegen hitte en mechanische belasting. Daarbovenop komt vaak [[Hoge zichtbaarheid]] als je langs de weg werkt. [[Ademlucht]] is een apart systeem en geen onderdeel van de stof, maar hoort wél bij dezelfde inzet.
+De jas en broek beschermen tegen hitte en mechanische belasting. Daarbovenop komt vaak @[Hoge zichtbaarheid] als je langs de weg werkt. Bij gevaarlijke stoffen geldt de @[6A-regel gevaarlijke stoffen]. @[Ademlucht] is een apart systeem en geen onderdeel van de stof, maar hoort wél bij dezelfde inzet.
 
-Wat hier nog ontbreekt in de wiki, vullen collega’s aan: [[Kazernekleding]], [[Bevelvoering]].`,
+Wat hier nog ontbreekt in de wiki, vullen collega’s aan: @[Kazernekleding], @[Bevelvoering].`,
     metadata: {
       licentie: "CC-BY-SA-4.0",
       trefwoorden: "uitrukkleding, brandweer, PBM",
@@ -175,11 +175,13 @@ Rijksoverheid. (z.d.). Defensie. https://www.rijksoverheid.nl`,
     category: "Uitrusting",
     dienst: "Ambulance",
     summary: "Waarom de burger de ambulance-eenheid in één oogopslag moet herkennen.",
-    body: `Ambulancekleding is een [[Wat is een uniform?|uniform]]: voorgeschreven, herkenbaar, gelijk binnen de functie. Op straat en op de rijbaan komt daar [[Hoge zichtbaarheid]] bij.
+    body: `Ambulancekleding is een @[Wat is een uniform?]: voorgeschreven, herkenbaar, gelijk binnen de functie. Op straat en op de rijbaan komt daar @[Hoge zichtbaarheid] bij.
 
-Hygiëne is geen sluitstuk. Wat mee naar huis gaat, is een risico. Zie [[Hygiëne en kleding]].
+Bij een melding op de snelweg geef je locatie door met @[Snelweg locatietips / Hectometer palen]. Bij een groot incident volgt @[METHANE bericht structuur].
 
-De meldkamer draagt iets anders dan de wagen. Dat onderscheid blijft staan onder [[Meldkamer en kleding]].`,
+Hygiëne is geen sluitstuk. Wat mee naar huis gaat, is een risico. Zie @[Hygiëne en kleding].
+
+De meldkamer draagt iets anders dan de wagen. Dat onderscheid blijft staan onder @[Meldkamer en kleding].`,
     metadata: {
       licentie: "CC-BY-SA-4.0",
       trefwoorden: "ambulance, herkenning, AZN",
@@ -194,9 +196,9 @@ Rijksoverheid. (z.d.). Ambulancezorg. https://www.rijksoverheid.nl`,
     category: "Over",
     dienst: "",
     summary: "Artikelen, diensten, tags en verwijzingen in één beeld.",
-    body: `KennisWeb toont hoe pagina’s aan elkaar zitten: dienst, tag, categorie en verwijzing. Klik je dieper, dan blijft alleen wat bij dat thema hoort.
+    body: `KennisWeb toont hoe pagina’s aan elkaar zitten: dienst, tag, categorie en verwijzing. De lijnen komen uit @-koppelingen en tags in de tekst.
 
-Lege plekken zijn verzoeken om aanvulling. Open [[Hoe je bijdraagt]] en vul het aan, met bron.`,
+Lege plekken zijn verzoeken om aanvulling. Open @[Hoe je bijdraagt] en stuur een update ter beoordeling, met bron.`,
     metadata: {
       licentie: "CC-BY-SA-4.0",
       trefwoorden: "samenhang, wikilink, tag",

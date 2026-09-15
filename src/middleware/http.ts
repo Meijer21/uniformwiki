@@ -101,7 +101,7 @@ export function registerHttpGuards(app: FastifyInstance): void {
         "img-src 'self' data:",
         "style-src 'self' 'unsafe-inline' https://fonts.bunny.net",
         "font-src https://fonts.bunny.net",
-        "script-src 'self'",
+        "script-src 'self' 'unsafe-inline'",
         "connect-src 'self'",
         "frame-ancestors 'none'",
         "base-uri 'self'",

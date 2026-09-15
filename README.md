@@ -21,9 +21,9 @@ Speelboek: [WORKFLOW.md](WORKFLOW.md).
 
 ## Wat je ermee doet
 
-- Kolom kiezen, daarna thema, daarna artikel. Hoe dieper, hoe gerichter. Statische data, geen medailles.
-- KennisWeb toont wat bij een thema hoort. Onder elk artikel kun je zelf koppelen.
-- Aanvullen: wat nog ontbreekt. Aanpassen: bestaande stukken verbeteren.
+- Kolom kiezen, daarna thema, daarna artikel.
+- KennisWeb toont wat bij een artikel hoort. Koppelingen komen uit @ in de tekst en uit tags.
+- Aanpassen stuurt een update ter beoordeling. Geen aparte koppelknop.
 - Elke pagina: bron met naam en klikbare link, plus of de tekst met AI is gemaakt.
 - THISLINE-blokken voor Pulse, Front Line Cards en het platform. Geen verkochte advertenties.
 - Bijdragen via `/bijdragen` zonder account. Beheer op `/beheer`.
