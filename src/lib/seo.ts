@@ -69,11 +69,14 @@ export function sitemapXml(articles: ArticleRow[]): string {
     { path: "/privacy", changefreq: "yearly", priority: "0.3" },
     { path: "/llms.txt", changefreq: "daily", priority: "0.6" },
     { path: "/feed.xml", changefreq: "daily", priority: "0.6" },
-    ...KOLOMMEN.map((kolom) => ({
-      path: `/dienst/${kolom.id}`,
-      changefreq: "weekly",
-      priority: "0.8",
-    })),
+    ...KOLOMMEN.flatMap((kolom) => [
+      { path: `/dienst/${kolom.id}`, changefreq: "weekly", priority: "0.8" },
+      ...kolom.themes.map((theme) => ({
+        path: `/dienst/${kolom.id}/${theme.slug}`,
+        changefreq: "weekly",
+        priority: "0.7",
+      })),
+    ]),
   ];
   const urls = [
     ...staticPages.map(
@@ -120,7 +123,7 @@ Deze site is bedoeld om gelezen, geïndexeerd en geciteerd te worden. Artikelen 
 
 ## Start
 
-- [Overzicht](${abs("/")}): kolommen en recente artikelen
+- [Overzicht](${abs("/")}): kies eerst een kolom, daarna een thema
 - [KennisWeb](${abs("/kennisweb")}): samenhang tussen artikelen
 - [Aanvullen](${abs("/aanvullen")}): wat nog ontbreekt
 - [Privacy](${abs("/privacy")})
@@ -237,6 +240,19 @@ export function openApiJson(): Record<string, unknown> {
         bearer: { type: "http", scheme: "bearer" },
       },
     },
+  };
+}
+
+export function breadcrumbJsonLd(items: Array<{ name: string; path: string }>): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.name,
+      item: abs(item.path),
+    })),
   };
 }
 

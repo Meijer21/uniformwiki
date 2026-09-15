@@ -544,6 +544,98 @@ details summary {
 .home-tools { margin-top: var(--sp-6); }
 .kolom-grid { margin-top: var(--sp-5); }
 
+.home-start { max-width: 40rem; }
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-6);
+  font-size: var(--fs-meta);
+  color: var(--tl-text-lo);
+}
+.crumbs a { color: var(--tl-text-lo); }
+.crumbs a:hover { color: var(--tl-lime); }
+.crumbs [aria-current="page"] { color: var(--tl-white); }
+.crumbs-sep { color: var(--tl-text-faint); }
+
+.choose-list {
+  display: grid;
+  margin-top: var(--sp-7);
+  border-top: var(--bw-hair) solid var(--tl-line);
+}
+.choose-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--sp-4);
+  align-items: center;
+  min-height: 72px;
+  padding: var(--sp-4) var(--sp-2) var(--sp-4) 0;
+  border-bottom: var(--bw-hair) solid var(--tl-line);
+  color: inherit;
+}
+.choose-row:hover { color: inherit; background: var(--tl-surface-2); }
+.choose-row:focus-visible { background: var(--tl-surface-2); }
+.choose-copy { min-width: 0; }
+.choose-title {
+  display: block;
+  color: var(--tl-white);
+  font-family: var(--font-display);
+  font-weight: var(--fw-heading);
+  font-size: var(--fs-h5);
+  letter-spacing: var(--ls-tight);
+  text-transform: uppercase;
+  line-height: var(--lh-head);
+}
+.choose-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-clamp: 2;
+  margin-top: var(--sp-1);
+  color: var(--tl-text-lo);
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-light);
+  line-height: var(--lh-snug);
+}
+.choose-meta {
+  color: var(--tl-text-faint);
+  font-family: var(--font-display);
+  font-weight: var(--fw-heading);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.choose-go {
+  color: var(--tl-lime);
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 300;
+}
+
+.search-quiet {
+  display: grid;
+  gap: var(--sp-3);
+  margin-top: var(--sp-8);
+  padding-top: var(--sp-6);
+  border-top: var(--bw-hair) solid var(--tl-line);
+}
+@media (min-width: 640px) {
+  .search-quiet {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+}
+.chooser-back {
+  margin: var(--sp-6) 0 0;
+  font-size: var(--fs-meta);
+}
+.chooser-back a { color: var(--tl-text-lo); }
+.chooser-back a:hover { color: var(--tl-lime); }
+.empty .btn { margin-top: var(--sp-4); }
+
 fieldset.choice-set {
   margin: 0;
   padding: 0;

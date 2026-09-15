@@ -11,13 +11,18 @@ export interface Gap {
   reason: "thema" | "wikilink";
 }
 
+export function articleMatchesTheme(
+  article: ArticleRow,
+  theme: { slug: string; title: string },
+): boolean {
+  const needle = theme.title.toLowerCase();
+  const slug = theme.slug.toLowerCase();
+  const hay = `${article.title} ${article.slug} ${article.summary} ${article.body}`.toLowerCase();
+  return article.slug === theme.slug || hay.includes(needle) || hay.includes(slug.replace(/-/g, " "));
+}
+
 function covered(themeTitle: string, themeSlug: string, articles: ArticleRow[]): boolean {
-  const needle = themeTitle.toLowerCase();
-  const slug = themeSlug.toLowerCase();
-  return articles.some((article) => {
-    const hay = `${article.title} ${article.slug} ${article.summary} ${article.body}`.toLowerCase();
-    return article.slug === themeSlug || hay.includes(needle) || hay.includes(slug.replace(/-/g, " "));
-  });
+  return articles.some((article) => articleMatchesTheme(article, { title: themeTitle, slug: themeSlug }));
 }
 
 export function findGaps(articles: ArticleRow[], kolomLabel?: string): Gap[] {

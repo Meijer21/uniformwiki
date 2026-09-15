@@ -1,14 +1,14 @@
 import { config } from "../config.js";
 import { aiLabel, parseCitations, sourceBlock, type Citation } from "../lib/citations.js";
-import { findGaps } from "../lib/gaps.js";
+import { articleMatchesTheme, findGaps } from "../lib/gaps.js";
 import type { ArticleNeighborhood, GraphPayload, RelatedArticle } from "../lib/graph.js";
-import { buildLinkResolver } from "../lib/links.js";
+import { articleDiensten, articleTags, buildLinkResolver } from "../lib/links.js";
 import { escapeHtml, renderMarkdown } from "../lib/markdown.js";
 import { parseStoredMetadata } from "../lib/metadata.js";
 import { promosFor, type Promo, type PromoPlacement } from "../lib/promos.js";
-import { articleJsonLd, organizationJsonLd } from "../lib/seo.js";
-import { KOLOMMEN } from "../lib/taxonomy.js";
-import type { ApiKeyRow, ArticleRow, CategoryCount, RevisionRow, VocabRow } from "../types.js";
+import { articleJsonLd, breadcrumbJsonLd, organizationJsonLd } from "../lib/seo.js";
+import { KOLOMMEN, type Kolom, type Thema } from "../lib/taxonomy.js";
+import type { ApiKeyRow, ArticleRow, RevisionRow, VocabRow } from "../types.js";
 
 export interface PageOptions {
   title: string;
@@ -82,6 +82,56 @@ function promoRow(placement: PromoPlacement, dienst?: string): string {
 
 function sponsorLine(): string {
   return `<p class="sponsor">Gehost door <strong>THISLINE</strong>. Voor wie naar voren stapt.</p>`;
+}
+
+function stukkenLabel(count: number): string {
+  if (count === 0) {
+    return "Nog leeg";
+  }
+  return count === 1 ? "1 stuk" : `${count} stukken`;
+}
+
+function crumbs(items: Array<{ href?: string; label: string }>): string {
+  return `<nav class="crumbs" aria-label="Pad">${items
+    .map((item, index) => {
+      const last = index === items.length - 1;
+      const node =
+        item.href && !last
+          ? `<a href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a>`
+          : `<span${last ? ' aria-current="page"' : ""}>${escapeHtml(item.label)}</span>`;
+      const sep = index === 0 ? "" : `<span class="crumbs-sep" aria-hidden="true">/</span>`;
+      return `${sep}${node}`;
+    })
+    .join("")}</nav>`;
+}
+
+function chooseRow(href: string, title: string, text: string, meta: string): string {
+  return `<a class="choose-row" href="${escapeHtml(href)}">
+    <span class="choose-copy">
+      <span class="choose-title">${escapeHtml(title)}</span>
+      <span class="choose-text">${escapeHtml(text)}</span>
+    </span>
+    <span class="choose-meta">${escapeHtml(meta)}</span>
+    <span class="choose-go" aria-hidden="true">›</span>
+  </a>`;
+}
+
+function articleTeaser(article: ArticleRow): string {
+  return `<article class="article-teaser">
+    <span class="tag">${escapeHtml(article.dienst || article.category)}</span>
+    <h2><a href="/wiki/${encodeURIComponent(article.slug)}">${escapeHtml(article.title)}</a></h2>
+    <p>${escapeHtml(article.summary)}</p>
+  </article>`;
+}
+
+function searchForm(query: string, label = "Of zoek een artikel"): string {
+  return `<form method="get" action="/" class="search-quiet" role="search">
+    <label class="field">
+      <span class="field-label">${escapeHtml(label)}</span>
+      <input class="input" type="search" id="q" name="q" value="${escapeHtml(query)}" placeholder="Titel of bron" enterkeyhint="search" />
+    </label>
+    <button class="btn btn-primary" type="submit">Zoeken</button>
+  </form>`;
 }
 
 function gapCard(title: string, summary: string, slug: string): string {
@@ -177,70 +227,65 @@ export function layout(options: PageOptions, content: string): string {
 }
 
 export function homePage(
-  categories: CategoryCount[],
   articles: ArticleRow[],
   query: string,
   notice?: string,
-  gaps: ReturnType<typeof findGaps> = [],
 ): string {
-  const empty = articles.length === 0;
-  const kolomCards = KOLOMMEN.map(
-    (kolom) => `
-    <a class="card kolom-card" href="/dienst/${encodeURIComponent(kolom.id)}">
-      <p class="eyebrow">${escapeHtml(kolom.label)}</p>
-      <p>${escapeHtml(kolom.summary)}</p>
-    </a>`,
-  ).join("");
-  const articleCards = articles
-    .slice(0, 12)
-    .map(
-      (article) => `
-      <article class="article-teaser">
-        <span class="tag">${escapeHtml(article.dienst || article.category)}</span>
-        <h2><a href="/wiki/${encodeURIComponent(article.slug)}">${escapeHtml(article.title)}</a></h2>
-        <p>${escapeHtml(article.summary)}</p>
-      </article>`,
-    )
-    .join("");
-  const catChips = categories
-    .map(
-      (item) =>
-        `<a class="chip" href="/?categorie=${encodeURIComponent(item.category)}">${escapeHtml(item.category)}</a>`,
-    )
-    .join("");
+  const searching = query.trim().length > 0;
+  const results = searching
+    ? articles
+    : [];
+  const empty = searching && results.length === 0;
+  const kolomRows = KOLOMMEN.map((kolom) => {
+    const count = articles.filter((article) =>
+      articleDiensten(article).some((dienst) => dienst.toLowerCase() === kolom.label.toLowerCase()),
+    ).length;
+    return chooseRow(`/dienst/${encodeURIComponent(kolom.id)}`, kolom.label, kolom.summary, stukkenLabel(count));
+  }).join("");
+  const resultList = results.map(articleTeaser).join("");
+
+  if (searching) {
+    return layout(
+      {
+        title: `Zoeken: ${query}`,
+        description: `Zoekresultaten in UniformWiki voor ${query}.`,
+        path: "/",
+      },
+      `
+    <div class="home-start">
+      ${crumbs([{ href: "/", label: "Kolommen" }, { label: "Zoeken" }])}
+      <section>
+        <h1>Resultaten</h1>
+        <p class="lead">Voor “${escapeHtml(query)}”.</p>
+      </section>
+      ${notice ? `<p class="ok">${escapeHtml(notice)}</p>` : ""}
+      ${searchForm(query, "Zoeken")}
+      <section class="mt-6" aria-live="polite">
+        ${empty ? `<div class="empty">Niets gevonden. Kies een kolom of <a href="/bijdragen">schrijf de pagina</a>.</div>` : `<div class="article-list">${resultList}</div>`}
+      </section>
+    </div>
+    ${sponsorLine()}`,
+    );
+  }
 
   return layout(
     {
       title: config.siteName,
-      description: "Kennisbank voor brandweer, ambulance, politie, defensie en handhaving. Voor en door mensen in uniform.",
+      description: "Kies eerst een kolom: brandweer, ambulance, politie, defensie of handhaving. Daarna een thema, daarna het artikel.",
       path: "/",
       jsonLd: organizationJsonLd(),
     },
     `
-    <section>
-      <p class="eyebrow">Open kennisbank</p>
-      <h1>Kennis voor wie naar voren stapt.</h1>
-      <p class="lead">Kies je kolom. Daarna het thema. Daarna het artikel. Geen scores. Geen medailles. Alleen wat collega’s hebben nagekeken.</p>
-    </section>
-    <div class="kolom-grid">${kolomCards}</div>
-    <form method="get" action="/" class="search home-tools">
-      <label class="field" style="flex:1">
-        <span class="field-label">Zoeken</span>
-        <input class="input" id="q" name="q" value="${escapeHtml(query)}" placeholder="Titel, kolom, tag of bron" />
-      </label>
-      <button class="btn btn-primary" type="submit">Zoeken</button>
-    </form>
-    ${notice ? `<p class="ok">${escapeHtml(notice)}</p>` : ""}
-    ${catChips ? `<div class="chips">${catChips}</div>` : ""}
-    <section class="mt-8">
-      <div class="row-between">
-        <h2>${query ? `Resultaten voor “${escapeHtml(query)}”` : "Recent"}</h2>
-        <a href="/bijdragen">Zelf schrijven</a>
-      </div>
-      ${empty ? `<div class="empty">Niets gevonden. Probeer een kortere term of <a href="/bijdragen">schrijf de pagina</a>.</div>` : `<div class="article-list">${articleCards}</div>`}
-    </section>
-    ${gaps[0] ? gapCard(gaps[0].title, gaps[0].summary, gaps[0].slug) : ""}
-    ${promoRow(query ? "search" : "home")}
+    <div class="home-start">
+      <section>
+        <p class="eyebrow">Open kennisbank</p>
+        <h1>Welke kolom?</h1>
+        <p class="lead">Kies één dienst. Daarna volgt het thema. Daarna het artikel.</p>
+      </section>
+      ${notice ? `<p class="ok">${escapeHtml(notice)}</p>` : ""}
+      <nav class="choose-list" aria-label="Kolommen">${kolomRows}</nav>
+      ${searchForm("")}
+    </div>
     ${sponsorLine()}`,
   );
 }
@@ -579,40 +624,82 @@ export function graphPage(payload: { nodes: unknown[]; edges: unknown[] }, focus
   );
 }
 
-export function dienstPage(
-  label: string,
-  summary: string,
-  articles: ArticleRow[],
-  gaps: ReturnType<typeof findGaps>,
-  themes: Array<{ slug: string; title: string; summary: string }>,
-): string {
-  const list = articles
-    .map(
-      (article) => `<article class="article-teaser">
-        <h2><a href="/wiki/${encodeURIComponent(article.slug)}">${escapeHtml(article.title)}</a></h2>
-        <p>${escapeHtml(article.summary)}</p>
-      </article>`,
-    )
-    .join("");
-  const themeChips = themes
-    .map((theme) => `<a class="chip" href="/bijdragen?slug=${encodeURIComponent(theme.slug)}&title=${encodeURIComponent(theme.title)}&vast=1">${escapeHtml(theme.title)}</a>`)
+export function dienstPage(kolom: Kolom, articles: ArticleRow[]): string {
+  const rows = kolom.themes
+    .map((theme) => {
+      const count = articles.filter((article) => articleMatchesTheme(article, theme)).length;
+      return chooseRow(
+        `/dienst/${encodeURIComponent(kolom.id)}/${encodeURIComponent(theme.slug)}`,
+        theme.title,
+        theme.summary,
+        stukkenLabel(count),
+      );
+    })
     .join("");
   return layout(
     {
-      title: label,
-      description: summary,
-      path: `/dienst/${label.toLowerCase()}`,
+      title: kolom.label,
+      description: `${kolom.summary} Kies een thema.`,
+      path: `/dienst/${kolom.id}`,
+      jsonLd: breadcrumbJsonLd([
+        { name: "Kolommen", path: "/" },
+        { name: kolom.label, path: `/dienst/${kolom.id}` },
+      ]),
     },
     `
-    <section>
-      <p class="eyebrow">Kolom</p>
-      <h1>${escapeHtml(label)}</h1>
-      <p class="lead">${escapeHtml(summary)} De thema’s hieronder liggen vast. Artikelen vullen ze. Wat leeg is, mag jij aanvullen.</p>
-      <div class="chips">${themeChips}</div>
-    </section>
-    <section class="mt-8">${list || `<div class="empty">Nog geen goedgekeurde stukken in deze kolom.</div>`}</section>
-    ${gaps.slice(0, 3).map((gap) => gapCard(gap.title, gap.summary, gap.slug)).join("")}
-    ${promoRow("article", label)}
+    <div class="home-start">
+      ${crumbs([{ href: "/", label: "Kolommen" }, { label: kolom.label }])}
+      <section>
+        <p class="eyebrow">Kolom</p>
+        <h1>Welk thema?</h1>
+        <p class="lead">${escapeHtml(kolom.summary)}</p>
+      </section>
+      <nav class="choose-list" aria-label="Thema’s in ${escapeHtml(kolom.label)}">${rows}</nav>
+      <p class="chooser-back"><a href="/">Andere kolom</a></p>
+    </div>
+    ${sponsorLine()}`,
+  );
+}
+
+export function themePage(kolom: Kolom, theme: Thema, articles: ArticleRow[]): string {
+  const list = articles.map(articleTeaser).join("");
+  const empty = articles.length === 0;
+  return layout(
+    {
+      title: `${theme.title} · ${kolom.label}`,
+      description: theme.summary,
+      path: `/dienst/${kolom.id}/${theme.slug}`,
+      jsonLd: breadcrumbJsonLd([
+        { name: "Kolommen", path: "/" },
+        { name: kolom.label, path: `/dienst/${kolom.id}` },
+        { name: theme.title, path: `/dienst/${kolom.id}/${theme.slug}` },
+      ]),
+    },
+    `
+    <div class="home-start">
+      ${crumbs([
+        { href: "/", label: "Kolommen" },
+        { href: `/dienst/${kolom.id}`, label: kolom.label },
+        { label: theme.title },
+      ])}
+      <section>
+        <p class="eyebrow">${escapeHtml(kolom.label)}</p>
+        <h1>${escapeHtml(theme.title)}</h1>
+        <p class="lead">${escapeHtml(theme.summary)}</p>
+      </section>
+      <section class="mt-6" aria-label="Artikelen">
+        ${
+          empty
+            ? `<div class="empty">
+                <p>Dit thema heeft nog geen stuk.</p>
+                <a class="btn btn-primary" href="/bijdragen?slug=${encodeURIComponent(theme.slug)}&title=${encodeURIComponent(theme.title)}&dienst=${encodeURIComponent(kolom.label)}&vast=1">Aanvullen</a>
+              </div>`
+            : `<div class="article-list">${list}</div>`
+        }
+      </section>
+      <p class="chooser-back"><a href="/dienst/${encodeURIComponent(kolom.id)}">Ander thema</a></p>
+    </div>
+    ${promoRow("article", kolom.label)}
     ${sponsorLine()}`,
   );
 }

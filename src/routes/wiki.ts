@@ -5,14 +5,13 @@ import {
   getArticleByAny,
   listAllArticles,
   listApprovedArticles,
-  listCategories,
   listPendingRevisions,
   listRevisions,
   setRevisionDecision,
   writeArticle,
 } from "../lib/articles.js";
 import { citationsFromFields, parseCitations } from "../lib/citations.js";
-import { findGaps } from "../lib/gaps.js";
+import { articleMatchesTheme, findGaps } from "../lib/gaps.js";
 import { buildGraph, filterArticles, neighborhood } from "../lib/graph.js";
 import { listApiKeys } from "../lib/keys.js";
 import { articleDiensten, articleTags } from "../lib/links.js";
@@ -48,6 +47,7 @@ import {
   notFoundPage,
   privacyPage,
   tagPage,
+  themePage,
 } from "../views/templates.js";
 
 function html(reply: FastifyReply, status: number, body: string): FastifyReply {
@@ -122,13 +122,9 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
     try {
       const query = typeof request.query === "object" && request.query ? (request.query as Record<string, string>) : {};
       const q = (query.q ?? "").trim();
-      const category = (query.categorie ?? "").trim();
-      const [categories, articles] = await Promise.all([
-        listCategories(),
-        listApprovedArticles(q || undefined, category || undefined),
-      ]);
+      const articles = await listApprovedArticles(q || undefined);
       const notice = query.geplaatst === "1" ? "Je bijdrage staat klaar voor keuring. Zodra die goedgekeurd is, komt hij live." : undefined;
-      return html(reply, 200, homePage(categories, articles, q, notice, findGaps(articles)));
+      return html(reply, 200, homePage(articles, q, notice));
     } catch (error) {
       request.log.error({ err: error }, "Homepagina mislukt");
       return html(reply, 500, errorPage("Het overzicht kon niet worden geladen."));
@@ -353,6 +349,26 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
   });
   app.get("/leemtes", async (request, reply) => reply.redirect("/aanvullen", 301));
 
+  app.get("/dienst/:id/:thema", async (request, reply) => {
+    try {
+      const { id, thema } = request.params as { id: string; thema: string };
+      const kolom = kolomById(id) || KOLOMMEN.find((item) => slugify(item.label) === slugify(id));
+      if (!kolom) {
+        return html(reply, 404, notFoundPage("Deze kolom kennen we niet."));
+      }
+      const theme = kolom.themes.find((item) => item.slug === thema || slugify(item.title) === slugify(thema));
+      if (!theme) {
+        return html(reply, 404, notFoundPage("Dit thema kennen we niet."));
+      }
+      const inKolom = filterArticles(await listApprovedArticles(), { dienst: kolom.label });
+      const articles = inKolom.filter((article) => articleMatchesTheme(article, theme));
+      return html(reply, 200, themePage(kolom, theme, articles));
+    } catch (error) {
+      request.log.error({ err: error }, "Themapagina mislukt");
+      return html(reply, 500, errorPage("Dit thema kon niet worden getoond."));
+    }
+  });
+
   app.get("/dienst/:id", async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
@@ -361,7 +377,7 @@ export async function registerWikiRoutes(app: FastifyInstance): Promise<void> {
         return html(reply, 404, notFoundPage("Deze kolom kennen we niet."));
       }
       const articles = filterArticles(await listApprovedArticles(), { dienst: kolom.label });
-      return html(reply, 200, dienstPage(kolom.label, kolom.summary, articles, findGaps(articles, kolom.label), kolom.themes));
+      return html(reply, 200, dienstPage(kolom, articles));
     } catch (error) {
       request.log.error({ err: error }, "Kolompagina mislukt");
       return html(reply, 500, errorPage("Deze kolom kon niet worden getoond."));
